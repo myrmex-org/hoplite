@@ -1,0 +1,24 @@
+{
+  "name": "hoplite",
+  "version": "0.0.0",
+  "description": "Command line builder",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest --forceExit --coverage --verbose --detectOpenHandles",
+    "watch-test": "npm run test -- --watchAll",
+    "watch-ts": "tsc -w",
+    "tslint": "tslint -c tslint.json -p tsconfig.json"
+  },
+  "author": "Alexis Henaut",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jest": "^24.0.12",
+    "@types/node": "^11.13.0",
+    "jest": "^24.7.1",
+    "source-map-support": "^0.5.11",
+    "ts-jest": "^24.0.2",
+    "tslint": "^5.15.0",
+    "typescript": "^3.4.2"
+  }
+}
