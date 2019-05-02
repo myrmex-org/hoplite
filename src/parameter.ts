@@ -13,12 +13,15 @@ const simpleValidator = (allowedValues: string[]) => {
   return validator;
 };
 
+type AllowedValuesRetriever = () => Promise<string[]>;
+
 interface ParameterArg {
   name: string;
   description?: string;
   mandatory?: boolean;
   variadic?: boolean;
   validator?: ParameterValidator;
+  getAllowedValues?: AllowedValuesRetriever;
 }
 
 class Parameter implements HelpComponent {
@@ -27,6 +30,7 @@ class Parameter implements HelpComponent {
   public mandatory: boolean;
   public variadic: boolean;
   public validator: ParameterValidator;
+  public getAllowedValues: AllowedValuesRetriever;
 
   constructor({
     name,
@@ -34,12 +38,14 @@ class Parameter implements HelpComponent {
     mandatory = false,
     variadic = false,
     validator = () => Promise.resolve(true),
+    getAllowedValues = () => Promise.resolve([]),
   }: ParameterArg) {
     this.name = name;
     this.description = description;
     this.mandatory = mandatory;
     this.variadic = variadic;
     this.validator = validator;
+    this.getAllowedValues = getAllowedValues;
   }
 
   public getName() {
