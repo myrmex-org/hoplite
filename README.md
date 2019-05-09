@@ -1,3 +1,3 @@
-# Hoplite;
+# Hoplite
 
-A; command; line; parser;
+A command line parser

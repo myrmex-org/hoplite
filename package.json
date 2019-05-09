@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "description": "Command line builder",
   "main": "dist/index.js",
+  "bin": {
+    "myrmex": "dist/test.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "jest --forceExit --coverage --verbose --detectOpenHandles",

@@ -1,8 +1,11 @@
+#!/usr/bin/env node
 /* tslint:disable:no-console */
 import "source-map-support/register";
 import { Command } from "./command";
-import { simpleValidator } from "./parameter";
+import Parameter, { simpleValidator } from "./parameter";
 import { format } from "./utils";
+import getArgv from "./process-argv-wrapper";
+import Option from "./option";
 
 const myrmex = new Command({
   name: `myrmex`,
@@ -15,6 +18,7 @@ const myrmex = new Command({
         mandatory: true,
         variadic: true,
         validator: simpleValidator(["us-east-1", "us-east-2"]),
+        getAllowedValues: () => Promise.resolve(["us-east-1", "us-east-2"]),
       },
       description: "choose an AWS region",
     }, {
@@ -25,6 +29,7 @@ const myrmex = new Command({
         name: "environment",
         mandatory: true,
         validator: simpleValidator(["toto", "tata"]),
+        getAllowedValues: () => Promise.resolve(["toto", "otot"]),
       },
     },
   ],
@@ -40,18 +45,61 @@ const myrmex = new Command({
         {
           name: `plugins`,
           description: `The plugins to install`,
-          variadic: true,
+          variadic: false,
           validator: simpleValidator(["@myrmex/lambda", "@myrmex/api-gateway"]),
+          getAllowedValues: () => Promise.resolve(["@myrmex/lambda", "@myrmex/api-gateway"]),
         },
       ],
       action: (result) => {
+        console.log(`Creating new project ${format.cmd(result["project-name"])}`);
         console.log(result);
-        console.log(`Create new project ${format.cmd(result["project-name"])}`);
+        console.log("done");
       },
-    }),
+    }), {
+      name: "completion",
+      parameters: [
+        {
+          name: `current-prompt-content`,
+          description: `The current content typed in the prompt.`,
+          mandatory: true,
+        },
+        {
+          name: `cursor-position`,
+          description: `Index of the word where the cursor is positioned.`,
+          mandatory: true,
+        },
+      ],
+      action: async function (parseResult) {
+        // console.log(parseResult);
+        const promptContent = parseResult["current-prompt-content"].substring(0, parseResult["current-prompt-content"].lastIndexOf(" "))
+        const argv = (await getArgv(promptContent)).slice(0, parseInt(parseResult["cursor-position"], 10) + 2);
+        // console.log(argv.join('#####'));
+        // console.log(parseResult["cursor-position"])
+        const command = this.parentCommand as Command;
+        // console.log(argv)
+        const autoCompletionElement = await command.getAutoCompletionElement(argv);
+        // console.log(`XXX` + autoCompletionElement.getName())
+        // console.log(autoCompletionElement)
+        if (autoCompletionElement instanceof Command) {
+          // console.log("COMMAND");
+          const options = autoCompletionElement.options.map((o) => o.long ? `--${o.long}` : `-${o.short}`);
+          const subCommands = Array.from(autoCompletionElement.subCommands.values()).map((sc) => sc.name);
+          console.log([...options, ...subCommands].join(" "));
+        } else if (autoCompletionElement instanceof Parameter) {
+          // console.log("PARAMETER");
+          console.log((await autoCompletionElement.getAllowedValues()).join(' '));
+        } else if (autoCompletionElement instanceof Option && autoCompletionElement.parameter) {
+          // console.log("OPTION_WITH_PARAMETER");
+          console.log((await autoCompletionElement.parameter.getAllowedValues()).join(' '));
+        } else {
+          // console.log("NOTHING")
+        }
+        process.exit(0);
+      },
+    },
   ],
   description: "Create and manage a Myrmex project",
-  longDescription: "This command allows to create a Myrmex project.\nWhen executed in a Myrmex project, it is enriched by module subcommands",
+  longDescription: "This command allows to create a Myrmex project.\nWhen executed in a Myrmex project, it is enriched by module sub-commands",
 });
 
 const lambda = new Command({
@@ -62,14 +110,22 @@ const lambda = new Command({
       options: [
         {
           long: "function",
+          mandatory: true,
           parameter: {
             name: "function-identifier",
             mandatory: true,
             variadic: true,
             validator: async (parameterValue) => ["abc", "def"].includes(parameterValue),
+            getAllowedValues: () => Promise.resolve(["abc", "def"]),
           },
         },
       ],
+      action: (result) => {
+        console.log(result)
+        console.log(`Deploying ${format.cmd(result.function.join(", "))}`);
+        console.log(result);
+        console.log("done");
+      },
     }),
   ],
   description: "Manage AWS Lambda functions",
@@ -78,7 +134,7 @@ const lambda = new Command({
 
 myrmex.addSubCommand(lambda);
 
-myrmex.action((parseResult) => {
+myrmex.setAction((parseResult) => {
   console.log(JSON.stringify(parseResult, undefined, 2));
 });
 

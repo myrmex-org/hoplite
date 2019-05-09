@@ -45,6 +45,14 @@ class Option implements HelpComponent {
     }
   }
 
+  public getName() {
+    return this.long || this.short;
+  }
+
+  public isMandatory() {
+    return this.mandatory;
+  }
+
   public doesAcceptMultipleValues() {
     return this.parameter && this.parameter.isVariadic();
   }
