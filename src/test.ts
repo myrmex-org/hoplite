@@ -2,10 +2,8 @@
 /* tslint:disable:no-console */
 import "source-map-support/register";
 import { Command } from "./command";
-import Parameter, { simpleValidator } from "./parameter";
+import { simpleValidator } from "./parameter";
 import { format } from "./utils";
-import getArgv from "./process-argv-wrapper";
-import Option from "./option";
 
 const myrmex = new Command({
   name: `myrmex`,
@@ -55,48 +53,7 @@ const myrmex = new Command({
         console.log(result);
         console.log("done");
       },
-    }), {
-      name: "completion",
-      parameters: [
-        {
-          name: `current-prompt-content`,
-          description: `The current content typed in the prompt.`,
-          mandatory: true,
-        },
-        {
-          name: `cursor-position`,
-          description: `Index of the word where the cursor is positioned.`,
-          mandatory: true,
-        },
-      ],
-      action: async function (parseResult) {
-        // console.log(parseResult);
-        const promptContent = parseResult["current-prompt-content"].substring(0, parseResult["current-prompt-content"].lastIndexOf(" "))
-        const argv = (await getArgv(promptContent)).slice(0, parseInt(parseResult["cursor-position"], 10) + 2);
-        // console.log(argv.join('#####'));
-        // console.log(parseResult["cursor-position"])
-        const command = this.parentCommand as Command;
-        // console.log(argv)
-        const autoCompletionElement = await command.getAutoCompletionElement(argv);
-        // console.log(`XXX` + autoCompletionElement.getName())
-        // console.log(autoCompletionElement)
-        if (autoCompletionElement instanceof Command) {
-          // console.log("COMMAND");
-          const options = autoCompletionElement.options.map((o) => o.long ? `--${o.long}` : `-${o.short}`);
-          const subCommands = Array.from(autoCompletionElement.subCommands.values()).map((sc) => sc.name);
-          console.log([...options, ...subCommands].join(" "));
-        } else if (autoCompletionElement instanceof Parameter) {
-          // console.log("PARAMETER");
-          console.log((await autoCompletionElement.getAllowedValues()).join(' '));
-        } else if (autoCompletionElement instanceof Option && autoCompletionElement.parameter) {
-          // console.log("OPTION_WITH_PARAMETER");
-          console.log((await autoCompletionElement.parameter.getAllowedValues()).join(' '));
-        } else {
-          // console.log("NOTHING")
-        }
-        process.exit(0);
-      },
-    },
+    })
   ],
   description: "Create and manage a Myrmex project",
   longDescription: "This command allows to create a Myrmex project.\nWhen executed in a Myrmex project, it is enriched by module sub-commands",
@@ -104,32 +61,31 @@ const myrmex = new Command({
 
 const lambda = new Command({
   name: `lambda`,
+  description: "Manage AWS Lambda functions",
+  longDescription: "This sub-command provides tools to manage AWS Lambda functions",
   subCommands: [
     new Command({
       name: `deploy`,
-      options: [
-        {
-          long: "function",
-          mandatory: true,
-          parameter: {
-            name: "function-identifier",
-            mandatory: true,
-            variadic: true,
-            validator: async (parameterValue) => ["abc", "def"].includes(parameterValue),
-            getAllowedValues: () => Promise.resolve(["abc", "def"]),
-          },
-        },
-      ],
+      description: "Deploy AWS Lambda functions",
+      parameters: [, {
+        name: "alias",
+        mandatory: true,
+        variadic: false,
+        validator: async (parameterValue) => ["xxx", "yyy"].includes(parameterValue),
+        getAllowedValues: () => Promise.resolve(["xxx", "yyy"]),
+      }, {
+        name: "function",
+        mandatory: true,
+        variadic: true,
+        validator: async (parameterValue) => ["abc", "def"].includes(parameterValue),
+        getAllowedValues: () => Promise.resolve(["abc", "def"]),
+      }],
       action: (result) => {
         console.log(result)
         console.log(`Deploying ${format.cmd(result.function.join(", "))}`);
-        console.log(result);
-        console.log("done");
       },
     }),
   ],
-  description: "Manage AWS Lambda functions",
-  longDescription: "This sub-command provides tools to manage AWS Lambda functions",
 });
 
 myrmex.addSubCommand(lambda);

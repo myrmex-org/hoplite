@@ -4,6 +4,8 @@ import { HopliteError, SubCommandError, UnknownOptionError } from "./errors";
 import { Option, OptionArg } from "./option";
 import { Parameter, ParameterArg } from "./parameter";
 import { format, getIndentation, HelpComponent } from "./utils";
+// import { autoCompletionCommand } from "./commands/autocomplete";
+import { getArgv } from "./process-argv-wrapper";
 
 type Action = (parseResult: any) => any;
 
@@ -16,6 +18,7 @@ interface CommandArg {
   longDescription?: string;
   helpOption?: OptionArg;
   action?: Action;
+  autoCompletionCommand?: boolean;
 }
 
 function getHelpComponents(helpComponents: HelpComponent[], indent: string) {
@@ -41,6 +44,7 @@ class Command implements HelpComponent {
   public helpOptions: string[] = [];
   public action: Action;
   public parseResult: any = {};
+  public autoCompletionCommand: boolean;
   public errors: HopliteError[];
 
   constructor({
@@ -52,6 +56,7 @@ class Command implements HelpComponent {
     subCommands = [],
     helpOption = { long: "help", description: "show command usage" },
     action,
+    autoCompletionCommand = true
   }: CommandArg) {
     options.forEach((option) => { this.addOption(option); });
     parameters.forEach((parameter) => { this.addParameter(parameter); });
@@ -69,6 +74,7 @@ class Command implements HelpComponent {
       this.addOption(helpOption);
     }
     this.setAction(action);
+    this.autoCompletionCommand = autoCompletionCommand;
     this.errors = [];
   }
 
@@ -98,29 +104,63 @@ class Command implements HelpComponent {
     this.action = action;
   }
 
-  public async getAutoCompletionElement(argv: string[]): Promise<Command|Option|Parameter> {
+  public addAutoCompletionCommand() {
+    const autoCompletionCommand = new Command({
+      name: "completion",
+      parameters: [
+        {
+          name: `current-prompt-content`,
+          description: `The current content typed in the prompt.`,
+          mandatory: true,
+        },
+        {
+          name: `cursor-position`,
+          description: `Index of the word where the cursor is positioned.`,
+          mandatory: true,
+        },
+      ],
+      action: async function (parseResult) {
+        const promptContent = parseResult["current-prompt-content"].substring(0, parseResult["current-prompt-content"].lastIndexOf(" "))
+        const argv = (await getArgv(promptContent)).slice(0, parseInt(parseResult["cursor-position"], 10) + 2);
+        const autoCompletionValues = await this.parentCommand.parseForAutoCompletion(argv);
+        console.log(autoCompletionValues.join(' '))
+        process.exit(0);
+      }
+    })
+    this.addSubCommand(autoCompletionCommand);
+  }
+
+  public async getAutoCompletion() {
+    const optionsCompletion = this.options.map((o) => o.long ? `--${o.long}` : `-${o.short}`);
+    const subCommandsCompletion = Array.from(this.subCommands.values()).map((sc) => sc.name);
+    const parametersGetCompletion: Promise<string[]>[] = [];
+    this.parameters.forEach(async parameter => {
+      parametersGetCompletion.push(parameter.getAutoCompletion());
+    })
+    const parametersCompletion = [].concat(...(await Promise.all(parametersGetCompletion)));
+    return [...optionsCompletion, ...subCommandsCompletion, ...parametersCompletion];
+  }
+
+  public async parseForAutoCompletion(argv: string[]): Promise<string[]> {
     if (!this.parentCommand) {
       this.execPath = argv.shift();
       this.scriptPath = argv.shift();
     }
 
-    // if (argv.length <= 1) {
-    //   return this;
-    // }
-
     // Iterate through command arguments
     while (argv.length > 1) {
       const currentArgument = await this.processNextArgument(argv);
       if (currentArgument instanceof Command) {
-        return currentArgument.getAutoCompletionElement(argv);
+        return currentArgument.parseForAutoCompletion(argv);
       }
     }
 
     const argument = await this.processNextArgument(argv);
-    if (argument instanceof Option && !argument.parameter) {
-      return this
+    if (argument) {
+      const autoCompletionValues = await argument.getAutoCompletion()
+      return autoCompletionValues || this.getAutoCompletion()
     }
-    return argument || this;
+    return this.getAutoCompletion()
   }
 
   public async parse(argv: string[]): Promise<any> {
@@ -128,7 +168,13 @@ class Command implements HelpComponent {
       this.execPath = argv.shift();
       this.scriptPath = argv.shift();
     } else {
+      // If the current command is a sub-command,
+      // we inject the parsing result of the parent in the parsing result of the sub-command
       this.parseResult.parentCommand = this.parentCommand.parseResult;
+    }
+
+    if (this.addAutoCompletionCommand) {
+      await this.addAutoCompletionCommand();
     }
 
     // Iterate through command arguments
@@ -236,7 +282,7 @@ class Command implements HelpComponent {
     return this.subCommands.get(arg);
   }
 
-  public async processParameters(parameters: Parameter[], arg: string, argv: string[]): Promise<void|Command|Parameter> {
+  public async processParameters(parameters: Parameter[], arg: string, argv: string[]): Promise<Parameter> {
     const currentParameter = parameters[0];
     try {
       await currentParameter.validate(arg, undefined, this.parseResult);

@@ -75,6 +75,10 @@ class Parameter implements HelpComponent {
   public getHelpParts() {
     return { usage: this.getUsage(), description: this.description };
   }
+
+  public getAutoCompletion() {
+    return this.getAllowedValues();
+  }
 }
 
 export default Parameter;

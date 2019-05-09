@@ -67,6 +67,12 @@ class Option implements HelpComponent {
   public getHelpParts() {
     return { usage: this.getUsage(), description: this.description };
   }
+
+  public getAutoCompletion() {
+    if (this.parameter) {
+      return this.parameter.getAutoCompletion();
+    }
+  }
 }
 
 export default Option;
