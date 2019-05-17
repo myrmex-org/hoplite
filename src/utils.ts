@@ -1,10 +1,6 @@
 let indentation: string = `  `;
 let colorEnabled: boolean = true;
 
-function setIndentation(newIndentation: string) {
-  indentation = newIndentation;
-}
-
 function getIndentation() {
   return indentation;
 }
@@ -26,13 +22,5 @@ const format = {
   ok: (msg: string) => format.success(msg),
 };
 
-interface HelpParts {
-  usage: string;
-  description?: string;
-}
 
-abstract class HelpComponent {
-  public abstract getHelpParts(): HelpParts;
-}
-
-export { format, enableColors, setIndentation, getIndentation, HelpComponent };
+export { format, enableColors, getIndentation };

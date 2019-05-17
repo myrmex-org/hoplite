@@ -1,6 +1,6 @@
-import { ParameterValidationError } from "./errors";
+import { MissingOptionError } from "./errors";
 import { Parameter, ParameterArg } from "./parameter";
-import { HelpComponent } from "./utils";
+import BaseComponent from "./base-component";
 
 interface OptionArg {
   short?: string;
@@ -10,12 +10,13 @@ interface OptionArg {
   description?: string;
 }
 
-class Option implements HelpComponent {
-  public short?: string;
-  public long?: string;
-  public description?: string;
-  public mandatory?: boolean;
-  public parameter?: Parameter;
+class Option extends BaseComponent {
+  private short: string;
+  private long: string;
+  private description: string;
+  private mandatory: boolean;
+  private parameter: Parameter;
+  private value: boolean;
 
   constructor({
     short,
@@ -24,37 +25,66 @@ class Option implements HelpComponent {
     mandatory = false,
     parameter,
   }: OptionArg) {
-    this.short = short;
-    this.long = long;
-    this.description = description;
-    this.mandatory = mandatory;
+    super()
+    this.short = short
+    this.long = long
+    this.description = description
+    this.mandatory = mandatory
     if (parameter) {
-      this.parameter = parameter instanceof Parameter ? parameter : new Parameter(parameter);
+      this.parameter = parameter instanceof Parameter ? parameter : new Parameter(parameter)
+      this.parameter.setAsMandatory(true)
     }
   }
 
-  public async resolve(argv: string[], parseResult: any) {
-    if (!this.parameter) {
-      return true;
-    }
-    const parameterValue = argv.shift();
-    if (await this.parameter.validate(parameterValue, this.getUsage(), parseResult)) {
-      return parameterValue;
-    } else {
-      throw new ParameterValidationError(parameterValue, this.getUsage(true));
-    }
+  public getShort() {
+    return this.short
+  }
+
+  public getLong() {
+    return this.long
   }
 
   public getName() {
-    return this.long || this.short;
+    return this.long || this.short
   }
 
   public isMandatory() {
-    return this.mandatory;
+    return this.mandatory
   }
 
-  public doesAcceptMultipleValues() {
-    return this.parameter && this.parameter.isVariadic();
+  public hasParameter() {
+    return !!this.parameter
+  }
+
+  public getParameter() {
+    return this.parameter
+  }
+
+  public acceptsMultipleValues() {
+    return this.hasParameter() && this.parameter.isVariadic();
+  }
+
+  public setValue(value?: string) {
+    if (!this.parameter) {
+      this.value = true;
+    } else {
+      this.parameter.setValue(value)
+    }
+  }
+
+  public getValue() {
+    return this.hasParameter() ? this.parameter.getValue() : this.value
+  }
+
+  public async validate() {
+    if (this.getValue() === undefined && this.isMandatory()) {
+      this.errors.push(new MissingOptionError(this.getUsage()))
+    } else if (this.parameter && this.getValue()) {
+      if (!(await this.parameter.validate(this.getUsage()))) {
+        this.errors = this.parameter.getErrors()
+      }
+    }
+    return this.errors.length === 0
   }
 
   public getUsage(trim: boolean= false) {
