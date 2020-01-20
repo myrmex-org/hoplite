@@ -10,6 +10,12 @@ class UnknownOptionError extends HopliteError {
   }
 }
 
+class MultipleValuesForNonVariadicParameterError extends HopliteError {
+  constructor(parameterName: string, values: string[]) {
+    super(`Multiple values provided for non variadic parameter "${format.error(parameterName)}" : ${values.map((v) => format.error(v)).join(`, `)}.`);
+  }
+}
+
 class ParameterValidationError extends HopliteError {
   constructor(value: string, key?: string, correctValues?: string[]) {
     let message = `${format.error(value)} is not a correct value${key ? ` for ${format.cmd(key)}` : ""}.`;
@@ -30,4 +36,4 @@ class SubCommandError extends HopliteError {
   }
 }
 
-export { HopliteError, UnknownOptionError, ParameterValidationError, SubCommandError };
+export { HopliteError, UnknownOptionError, MultipleValuesForNonVariadicParameterError, ParameterValidationError, SubCommandError };

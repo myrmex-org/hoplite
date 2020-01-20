@@ -1,4 +1,4 @@
-import { ParameterValidationError } from "./errors";
+import { HopliteError, ParameterValidationError } from "./errors";
 import { Parameter, ParameterArg } from "./parameter";
 import { HelpComponent } from "./utils";
 
@@ -16,6 +16,7 @@ class Option implements HelpComponent {
   public description?: string;
   public mandatory?: boolean;
   public parameter?: Parameter;
+  public value: boolean;
 
   constructor({
     short,
@@ -24,6 +25,9 @@ class Option implements HelpComponent {
     mandatory = false,
     parameter,
   }: OptionArg) {
+    if (!short && !long) {
+      throw new HopliteError("An option should have a least one short name or one long name.")
+    }
     this.short = short;
     this.long = long;
     this.description = description;
@@ -31,6 +35,7 @@ class Option implements HelpComponent {
     if (parameter) {
       this.parameter = parameter instanceof Parameter ? parameter : new Parameter(parameter);
     }
+    this.value = false;
   }
 
   public async resolve(argv: string[], parseResult: any) {
@@ -45,6 +50,13 @@ class Option implements HelpComponent {
     }
   }
 
+  public setValue(argv: string[]) {
+    if (!this.parameter) {
+      this.value = true;
+    }
+    this.parameter.setValue(argv.shift());
+  }
+
   public getName() {
     return this.long || this.short;
   }
@@ -54,14 +66,24 @@ class Option implements HelpComponent {
   }
 
   public doesAcceptMultipleValues() {
-    return this.parameter && this.parameter.isVariadic();
+    return !!(this.parameter && this.parameter.isVariadic());
   }
 
   public getUsage(trim: boolean= false) {
-    const usage = (this.short ? `-${this.short}${this.long ? ", " : "  "}` : "  ")
-         + (this.long ? `--${this.long}` : "")
-         + (this.parameter ? ` ${this.parameter.getUsage()}` : "");
-    return trim ? usage.trim() : usage;
+    let usage = "";
+    if (this.short) {
+      usage += `-${this.short}`;
+      if (this.long) {
+        usage += ", ";
+      }
+    }
+    if (this.long) {
+      usage += `--${this.long}`
+    }
+    if (this.parameter) {
+      usage += ` ${this.parameter.getUsage()}`;
+    }
+    return usage;
   }
 
   public getHelpParts() {

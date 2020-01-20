@@ -1,4 +1,4 @@
-import { ParameterValidationError } from "./errors";
+import { MultipleValuesForNonVariadicParameterError, ParameterValidationError } from "./errors";
 import { HelpComponent } from "./utils";
 
 type ParameterValidator = (parameterValue: string, parameterKey?: string, parseResult?: any) => Promise<boolean>;
@@ -13,7 +13,7 @@ const simpleValidator = (allowedValues: string[]) => {
   return validator;
 };
 
-type AllowedValuesRetriever = () => Promise<string[]>;
+type AllowedValuesRetriever = (otherParameterValues: object) => Promise<string[]>;
 
 interface ParameterArg {
   name: string;
@@ -31,6 +31,7 @@ class Parameter implements HelpComponent {
   public variadic: boolean;
   public validator: ParameterValidator;
   public getAllowedValues: AllowedValuesRetriever;
+  public value: string[];
 
   constructor({
     name,
@@ -46,6 +47,7 @@ class Parameter implements HelpComponent {
     this.variadic = variadic;
     this.validator = validator;
     this.getAllowedValues = getAllowedValues;
+    this.value = [];
   }
 
   public getName() {
@@ -74,6 +76,22 @@ class Parameter implements HelpComponent {
 
   public getHelpParts() {
     return { usage: this.getUsage(), description: this.description };
+  }
+
+  public setValue(value: string) {
+    this.value.push(value);
+    return this;
+  }
+
+  public getValue() {
+    if (this.isVariadic()) {
+      return this.value;
+    } else if (this.value.length === 1) {
+      return this.value[0];
+    } else if (this.value.length === 0) {
+      return false
+    }
+    throw new MultipleValuesForNonVariadicParameterError(`parameter ${this.getName()} does not accept multiple values`, this.value);
   }
 }
 

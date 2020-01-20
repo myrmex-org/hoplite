@@ -236,22 +236,10 @@ class Command implements HelpComponent {
     return this.subCommands.get(arg);
   }
 
-  public async processParameters(parameters: Parameter[], arg: string, argv: string[]): Promise<void|Command|Parameter> {
+  public async processParameters(parameters: Parameter[], arg: string, argv: string[]): Promise<void|Parameter> {
     const currentParameter = parameters[0];
-    try {
-      await currentParameter.validate(arg, undefined, this.parseResult);
-    } catch (err) {
-      if (err instanceof HopliteError) {
-        this.errors.push(err);
-      } else {
-        throw err;
-      }
-    }
-    if (currentParameter.isVariadic()) {
-      this.parseResult[currentParameter.getName()] = this.parseResult[currentParameter.getName()] || [];
-      this.parseResult[currentParameter.getName()].push(arg);
-    } else {
-      this.parseResult[currentParameter.getName()] = arg;
+    currentParameter.setValue(arg)
+    if (!currentParameter.isVariadic()) {
       parameters.shift();
     }
     if (argv.length > 0) {
