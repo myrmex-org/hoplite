@@ -1,3 +1,5 @@
+import { ValidationResult } from "./validation";
+
 let indentation: string = `  `;
 let colorEnabled: boolean = true;
 
@@ -14,8 +16,8 @@ function enableColors(enabled: boolean = true) {
 }
 
 const format = {
-  cmd:   (msg: string) => format.custom(msg, "\x1b[33m"), // Yellow
-  info:  (msg: string) => format.custom(msg, "\x1b[36m"), // Cyan
+  cmd:     (msg: string) => format.custom(msg, "\x1b[33m"), // Yellow
+  info:    (msg: string) => format.custom(msg, "\x1b[36m"), // Cyan
   error:   (msg: string) => format.custom(msg, "\x1b[31m"), // Red
   success: (msg: string) => format.custom(msg, "\x1b[32m"), // Green
   custom:  (msg: string, code: string) => {
@@ -31,8 +33,9 @@ interface HelpParts {
   description?: string;
 }
 
-abstract class HelpComponent {
+abstract class BaseComponent {
   public abstract getHelpParts(): HelpParts;
+  public abstract validate(): Promise<ValidationResult>;
 }
 
-export { format, enableColors, setIndentation, getIndentation, HelpComponent };
+export { format, enableColors, setIndentation, getIndentation, BaseComponent };

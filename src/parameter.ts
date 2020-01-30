@@ -1,19 +1,21 @@
-import { MultipleValuesForNonVariadicParameterError, ParameterValidationError } from "./errors";
-import { HelpComponent } from "./utils";
+import { VariadicParameterValidationError, ParameterValidationError, ValidationError, ValidationResult } from "./validation";
+import { BaseComponent } from "./utils";
 
-type ParameterValidator = (parameterValue: string, parameterKey?: string, parseResult?: any) => Promise<boolean>;
+type ParameterValidator = (value: string, usage: string, otherCommandArgumentValues?: object) => Promise<ValidationResult|boolean>;
 
-const simpleValidator = (allowedValues: string[]) => {
-  const validator: ParameterValidator = (parameterValue: string, parameterKey: string) => {
-    if (!allowedValues.includes(parameterValue)) {
-      return Promise.reject(new ParameterValidationError(parameterValue, parameterKey, allowedValues));
+const generateSimpleValidator = (allowedValues: string[]) => {
+  const validator: ParameterValidator = (value: string, usage: string) => {
+    if (!allowedValues.includes(value)) {
+      return Promise.resolve(
+        new ValidationResult(false, new ParameterValidationError(usage, value, allowedValues))
+      );
     }
-    return Promise.resolve(true);
+    return Promise.resolve(new ValidationResult(true));
   };
   return validator;
 };
 
-type AllowedValuesRetriever = (otherParameterValues: object) => Promise<string[]>;
+type AllowedValuesRetriever = (otherCommandArgumentValues: object) => Promise<string[]>;
 
 interface ParameterArg {
   name: string;
@@ -24,7 +26,7 @@ interface ParameterArg {
   getAllowedValues?: AllowedValuesRetriever;
 }
 
-class Parameter implements HelpComponent {
+class Parameter implements BaseComponent {
   public name: string;
   public description: string;
   public mandatory: boolean;
@@ -38,7 +40,7 @@ class Parameter implements HelpComponent {
     description,
     mandatory = false,
     variadic = false,
-    validator = () => Promise.resolve(true),
+    validator = () => Promise.resolve({ success: true }),
     getAllowedValues = () => Promise.resolve([]),
   }: ParameterArg) {
     this.name = name;
@@ -62,8 +64,29 @@ class Parameter implements HelpComponent {
     return this.variadic;
   }
 
-  public validate(value: string, usage?: string, parseResult?: any) {
-    return this.validator(value, usage || this.getUsage(), parseResult);
+  public async validate(usage?: string, otherCommandArgumentValues?: object) {
+    const errors: ValidationError[] = [];
+    usage = usage || this.getUsage()
+    for (const value of this.value) {
+      let validationResult = await this.validator(value, usage, otherCommandArgumentValues);
+      if (typeof validationResult === 'boolean') {
+        validationResult = { success: validationResult };
+      }
+      if (validationResult.success === false) {
+        if (validationResult.error) {
+          errors.push(validationResult.error);
+        } else {
+          errors.push(new ParameterValidationError(usage, value));
+        }
+      }
+    }
+    if (errors.length > 0) {
+      if (this.isVariadic() && errors.length > 1) {
+        return new ValidationResult(false, new VariadicParameterValidationError(usage, errors));
+      }
+      return new ValidationResult(false, errors[errors.length - 1]);
+    }
+    return new ValidationResult(true);
   }
 
   public getUsage() {
@@ -86,14 +109,19 @@ class Parameter implements HelpComponent {
   public getValue() {
     if (this.isVariadic()) {
       return this.value;
-    } else if (this.value.length === 1) {
-      return this.value[0];
-    } else if (this.value.length === 0) {
-      return false
+    } else {
+      return this.value[this.value.length - 1];
     }
-    throw new MultipleValuesForNonVariadicParameterError(`parameter ${this.getName()} does not accept multiple values`, this.value);
+  }
+
+  public hasValue() {
+    return this.getValue() !== (this.isVariadic() ? [] : undefined);
+  }
+
+  public toString() {
+    return `Parameter ${this.getUsage()}`;
   }
 }
 
 export default Parameter;
-export { Parameter, ParameterArg, ParameterValidator, simpleValidator };
+export { Parameter, ParameterArg, ParameterValidator, generateSimpleValidator };

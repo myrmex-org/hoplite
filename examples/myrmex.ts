@@ -1,11 +1,10 @@
-#!/usr/bin/env node
+#!/usr/bin/env ts-node
 /* tslint:disable:no-console */
-import "source-map-support/register";
-import { Command } from "./command";
-import Parameter, { simpleValidator } from "./parameter";
-import { format } from "./utils";
-import getArgv from "./process-argv-wrapper";
-import Option from "./option";
+import { Command } from "../src/command";
+import Parameter, { generateSimpleValidator } from "../src/parameter";
+import { format } from "../src/utils";
+import getArgv from "../src/process-argv-wrapper";
+import Option from "../src/option";
 
 const myrmex = new Command({
   name: `myrmex`,
@@ -17,7 +16,7 @@ const myrmex = new Command({
         name: "aws-region",
         mandatory: true,
         variadic: true,
-        validator: simpleValidator(["us-east-1", "us-east-2"]),
+        validator: generateSimpleValidator(["us-east-1", "us-east-2"]),
         getAllowedValues: () => Promise.resolve(["us-east-1", "us-east-2"]),
       },
       description: "choose an AWS region",
@@ -28,7 +27,7 @@ const myrmex = new Command({
       parameter: {
         name: "environment",
         mandatory: true,
-        validator: simpleValidator(["toto", "tata"]),
+        validator: generateSimpleValidator(["toto", "tata"]),
         getAllowedValues: () => Promise.resolve(["toto", "otot"]),
       },
     },
@@ -45,8 +44,8 @@ const myrmex = new Command({
         {
           name: `plugins`,
           description: `The plugins to install`,
-          variadic: false,
-          validator: simpleValidator(["@myrmex/lambda", "@myrmex/api-gateway"]),
+          variadic: true,
+          validator: generateSimpleValidator(["@myrmex/lambda", "@myrmex/api-gateway"]),
           getAllowedValues: () => Promise.resolve(["@myrmex/lambda", "@myrmex/api-gateway"]),
         },
       ],
@@ -87,10 +86,10 @@ const myrmex = new Command({
           console.log([...options, ...subCommands].join(" "));
         } else if (autoCompletionElement instanceof Parameter) {
           // console.log("PARAMETER");
-          console.log((await autoCompletionElement.getAllowedValues()).join(' '));
+          console.log((await autoCompletionElement.getAllowedValues({})).join(' '));
         } else if (autoCompletionElement instanceof Option && autoCompletionElement.parameter) {
           // console.log("OPTION_WITH_PARAMETER");
-          console.log((await autoCompletionElement.parameter.getAllowedValues()).join(' '));
+          console.log((await autoCompletionElement.parameter.getAllowedValues({})).join(' '));
         } else {
           // console.log("NOTHING")
         }
@@ -115,21 +114,25 @@ const lambda = new Command({
             name: "function-identifier",
             mandatory: true,
             variadic: true,
-            validator: async (parameterValue) => ["abc", "def"].includes(parameterValue),
+            // validator: async (parameterValue) => ["abc", "def"].includes(parameterValue),
             getAllowedValues: () => Promise.resolve(["abc", "def"]),
           },
         },
       ],
       action: (result) => {
-        console.log(result)
         console.log(`Deploying ${format.cmd(result.function.join(", "))}`);
-        console.log(result);
+        console.log(JSON.stringify(result, null, 2));
         console.log("done");
       },
     }),
   ],
   description: "Manage AWS Lambda functions",
   longDescription: "This sub-command provides tools to manage AWS Lambda functions",
+  action: (result) => {
+    console.log(`Execute Lambda command`);
+    console.log(JSON.stringify(result, null, 2));
+    console.log("done");
+  },
 });
 
 myrmex.addSubCommand(lambda);

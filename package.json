@@ -2,26 +2,33 @@
   "name": "hoplite",
   "version": "0.0.0",
   "description": "Command line builder",
-  "main": "dist/index.js",
   "bin": {
-    "myrmex": "dist/test.js"
+    "hop-pizza": "examples/pizza.ts",
+    "hop-myrmex": "examples/myrmex.ts"
   },
   "scripts": {
     "build": "tsc",
     "test": "jest --forceExit --coverage --verbose --detectOpenHandles",
-    "watch-test": "npm run test -- --watchAll",
-    "watch-ts": "tsc -w",
-    "tslint": "tslint -c tslint.json -p tsconfig.json"
+    "test:bdd": "cucumber-js features/**/*.feature --require 'features/step-definitions/**/*.ts' --require-module ts-node/register --format node_modules/cucumber-pretty",
+    "test:watch": "npm run test -- --watchAll",
+    "ts:run": "ts-node",
+    "ts:watch": "tsc -w",
+    "lint": "tslint -c tslint.json -p tsconfig.json"
   },
   "author": "Alexis Henaut",
   "license": "MIT",
   "devDependencies": {
+    "@types/cucumber": "^6.0.0",
     "@types/jest": "^24.0.12",
     "@types/node": "^11.13.0",
+    "cucumber": "^6.0.5",
+    "cucumber-pretty": "^6.0.0",
     "jest": "^24.7.1",
     "source-map-support": "^0.5.11",
     "ts-jest": "^24.0.2",
+    "ts-node": "^8.6.2",
     "tslint": "^5.15.0",
     "typescript": "^3.4.2"
-  }
+  },
+  "dependencies": {}
 }

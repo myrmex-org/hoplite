@@ -1,6 +1,6 @@
-import { HopliteError, ParameterValidationError } from "./errors";
 import { Parameter, ParameterArg } from "./parameter";
-import { HelpComponent } from "./utils";
+import { BaseComponent } from "./utils";
+import { ValidationResult } from "./validation";
 
 interface OptionArg {
   short?: string;
@@ -10,7 +10,7 @@ interface OptionArg {
   description?: string;
 }
 
-class Option implements HelpComponent {
+class Option implements BaseComponent {
   public short?: string;
   public long?: string;
   public description?: string;
@@ -26,7 +26,7 @@ class Option implements HelpComponent {
     parameter,
   }: OptionArg) {
     if (!short && !long) {
-      throw new HopliteError("An option should have a least one short name or one long name.")
+      throw new Error("An option should have a least one short name or one long name.")
     }
     this.short = short;
     this.long = long;
@@ -38,23 +38,26 @@ class Option implements HelpComponent {
     this.value = false;
   }
 
-  public async resolve(argv: string[], parseResult: any) {
-    if (!this.parameter) {
-      return true;
-    }
-    const parameterValue = argv.shift();
-    if (await this.parameter.validate(parameterValue, this.getUsage(), parseResult)) {
-      return parameterValue;
+  public setValue(argv: string[]) {
+    if (this.parameter) {
+      this.parameter.setValue(argv.shift());
     } else {
-      throw new ParameterValidationError(parameterValue, this.getUsage(true));
+      this.value = true;
     }
   }
 
-  public setValue(argv: string[]) {
-    if (!this.parameter) {
-      this.value = true;
+  public getValue() {
+    if (this.parameter) {
+      return this.parameter.getValue();
     }
-    this.parameter.setValue(argv.shift());
+    return this.value;
+  }
+
+  public hasValue() {
+    if (this.parameter) {
+      return this.parameter.hasValue();
+    }
+    return this.value !== undefined;
   }
 
   public getName() {
@@ -69,7 +72,14 @@ class Option implements HelpComponent {
     return !!(this.parameter && this.parameter.isVariadic());
   }
 
-  public getUsage(trim: boolean= false) {
+  public async validate(otherCommandArgumentValues?: object) {
+    if (this.parameter) {
+      return this.parameter.validate(this.getUsage(), otherCommandArgumentValues);
+    }
+    return new ValidationResult(true);
+  }
+
+  public getUsage() {
     let usage = "";
     if (this.short) {
       usage += `-${this.short}`;
@@ -88,6 +98,10 @@ class Option implements HelpComponent {
 
   public getHelpParts() {
     return { usage: this.getUsage(), description: this.description };
+  }
+
+  public toString() {
+    return `Option ${this.getUsage()}`;
   }
 }
 

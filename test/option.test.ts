@@ -1,4 +1,6 @@
 import { Option } from "../src/option";
+import { ParameterValidationError } from "../src/validation";
+import { format } from "../src/utils";
 
 describe("The Option class", () => {
 
@@ -38,7 +40,9 @@ describe("The Option class", () => {
     parameter: {
       name: "h-param",
       description: "the parameter from option h",
-      validator: (value) => Promise.resolve(/[0-9]+/.test(value))
+      validator: (value) => {
+        return Promise.resolve(/^[0-9]+$/.test(value));
+      }
     },
     mandatory: true
   });
@@ -64,7 +68,7 @@ describe("The Option class", () => {
       [ shortLongOption, "-c, --ccccc" ],
       [ shortLongDescriptionOption, "-d, --ddddd" ],
       [ shortLongDescriptionParameterOption, "-e, --eeeee [e-param]" ]
-    ])("should get %o usage", (option: Option, expected: string) => {
+    ])("should get %s usage", (option: Option, expected: string) => {
       expect(option.getUsage()).toEqual(expected);
     });
   });
@@ -76,7 +80,7 @@ describe("The Option class", () => {
       [ shortLongOption, { usage: "-c, --ccccc", description: undefined } ],
       [ shortLongDescriptionOption, { usage: "-d, --ddddd", description: "dd ddd dddd" } ],
       [ shortLongDescriptionParameterOption, { usage: "-e, --eeeee [e-param]", description: "ee eee eeee" } ]
-    ])("should get %o help parts", (option: Option, expected: object) => {
+    ])("should get %s help parts", (option: Option, expected: object) => {
       const parts = option.getHelpParts();
       expect(parts).toEqual(expected);
     });
@@ -102,18 +106,33 @@ describe("The Option class", () => {
     });
   });
 
-  describe("resolve() method", () => {
-    it("should give a boolean as result if there is no parameter", async () => {
-      await expect(shortOption.resolve(["argv1", "argv2"], {})).resolves.toBe(true);
+  describe("setValue() and getValue() methods", () => {
+    it("should set a boolean value if there is no parameter", () => {
+      shortOption.setValue(["argv1", "argv2"])
+      expect(shortOption.getValue()).toBe(true);
     });
-    it("should give a string as result if there is a string parameter", async () => {
-      await expect(shortLongDescriptionParameterOption.resolve(["argv1", "argv2"], {})).resolves.toBe("argv1");
+    it("should set a string value if there is a string parameter", () => {
+      shortLongDescriptionParameterOption.setValue(["argv1", "argv2"]);
+      expect(shortLongDescriptionParameterOption.getValue()).toBe("argv1");
     });
-    it.skip("should give an array as result if there is a variadic parameter", async () => {
-      await expect(longVariadicParameterOption.resolve(["argv1", "argv2"], {})).resolves.toBe([ "argv1" ]);
+    it("should set an array value if there is a variadic parameter", () => {
+      longVariadicParameterOption.setValue(["argv1", "argv2"]);
+      longVariadicParameterOption.setValue(["argv3", "argv4"]);
+      expect(longVariadicParameterOption.getValue()).toEqual([ "argv1", "argv3" ]);
     });
-    it.skip("should throw an error if the parameter does not validate", async () => {
-      await expect(shortIntegerParameterOption.resolve(["argv1", "argv2"], {})).rejects.toThrow();
+  });
+
+  describe("validate() method", () => {
+    it("should validate if the parameter is correct", async () => {
+      shortIntegerParameterOption.setValue(["123", "argv2"]);
+      await expect(shortIntegerParameterOption.validate()).resolves.toEqual({ success: true });
+    });
+    it("should not validate if the parameter is not correct", async () => {
+      shortIntegerParameterOption.setValue(["argv1", "argv2"]);
+      const validationResult = await shortIntegerParameterOption.validate();
+      expect(validationResult.success).toEqual(false);
+      expect(validationResult.error).toBeInstanceOf(ParameterValidationError);
+      expect(validationResult.error.getOutput()).toContain(`${format.error("argv1")} is not a correct value for ${format.cmd("-h [h-param]")}.`);
     });
   });
 
