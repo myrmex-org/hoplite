@@ -34,8 +34,16 @@ interface HelpParts {
 }
 
 abstract class BaseComponent {
+  public description?: string;
   public abstract getHelpParts(): HelpParts;
   public abstract validate(): Promise<ValidationResult>;
+  public setDescription(description: string): BaseComponent {
+    this.description = description;
+    return this;
+  }
+  public getDescription(): string {
+    return this.description;
+  }
 }
 
 export { format, enableColors, setIndentation, getIndentation, BaseComponent };

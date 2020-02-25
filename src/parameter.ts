@@ -26,7 +26,7 @@ interface ParameterArg {
   getAllowedValues?: AllowedValuesRetriever;
 }
 
-class Parameter implements BaseComponent {
+class Parameter extends BaseComponent {
   public name: string;
   public description: string;
   public mandatory: boolean;
@@ -43,6 +43,7 @@ class Parameter implements BaseComponent {
     validator = () => Promise.resolve({ success: true }),
     getAllowedValues = () => Promise.resolve([]),
   }: ParameterArg) {
+    super();
     this.name = name;
     this.description = description;
     this.mandatory = mandatory;
@@ -58,6 +59,10 @@ class Parameter implements BaseComponent {
 
   public isMandatory() {
     return this.mandatory;
+  }
+
+  public setAsMandatory(value: boolean) {
+    this.mandatory = value;
   }
 
   public isVariadic() {
@@ -115,7 +120,10 @@ class Parameter implements BaseComponent {
   }
 
   public hasValue() {
-    return this.getValue() !== (this.isVariadic() ? [] : undefined);
+    if (this.isVariadic()) {
+      return this.getValue().length > 0;
+    }
+    return this.getValue() !== undefined;
   }
 
   public toString() {

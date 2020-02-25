@@ -10,7 +10,7 @@ interface OptionArg {
   description?: string;
 }
 
-class Option implements BaseComponent {
+class Option extends BaseComponent {
   public short?: string;
   public long?: string;
   public description?: string;
@@ -28,12 +28,14 @@ class Option implements BaseComponent {
     if (!short && !long) {
       throw new Error("An option should have a least one short name or one long name.")
     }
+    super();
     this.short = short;
     this.long = long;
     this.description = description;
     this.mandatory = mandatory;
     if (parameter) {
       this.parameter = parameter instanceof Parameter ? parameter : new Parameter(parameter);
+      this.parameter.setAsMandatory(true);
     }
     this.value = false;
   }

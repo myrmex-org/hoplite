@@ -17,19 +17,24 @@ interface CommandArg {
   longDescription?: string;
   helpOption?: Option|OptionArg;
   action?: Action;
+  noExit?: boolean;
 }
 
-function getHelpComponents(helpComponents: BaseComponent[], indent: string) {
+function getHelpComponentsFormatation(helpComponents: BaseComponent[], indent: string) {
   let output = ``;
   const helpParts = helpComponents.map((hc) => hc.getHelpParts());
   const usagePartSize = Math.max(...helpParts.map((parts) => parts.usage.length)) + 3;
   helpParts.forEach((hp) => {
-    output += `${indent}${hp.usage.padEnd(usagePartSize)} ${hp.description || ``}${EOL}`;
+    if (hp.description) {
+      output += `${indent}${hp.usage.padEnd(usagePartSize)} ${hp.description}${EOL}`;
+    } else {
+      output += `${indent}${hp.usage}${EOL}`;
+    }
   });
   return output;
 }
 
-class Command implements BaseComponent {
+class Command extends BaseComponent {
   public execPath: string;
   public scriptPath: string;
   public name: string;
@@ -44,6 +49,9 @@ class Command implements BaseComponent {
   public action: Action;
   public parseResult: any = {};
   public errors: ValidationError[];
+  private noExit: boolean;
+  private stdOut: string = "";
+  private stdErr: string = "";
 
   constructor({
     name,
@@ -54,7 +62,9 @@ class Command implements BaseComponent {
     subCommands = [],
     helpOption = { long: "help", description: "show command usage" },
     action,
+    noExit = false,
   }: CommandArg) {
+    super();
     options.forEach((option) => { this.addOption(option); });
     parameters.forEach((parameter) => { this.addParameter(parameter); });
     subCommands.forEach((subCommand) => { this.addSubCommand(subCommand); });
@@ -67,6 +77,7 @@ class Command implements BaseComponent {
     }
     this.setAction(action);
     this.errors = [];
+    this.noExit = noExit;
   }
 
 
@@ -137,13 +148,10 @@ class Command implements BaseComponent {
     this.setValuesAndGetCurrentArgument(argv);
 
     // Check if the help option has been provided
-    this.printHelpIfNeeded()
-
-    // Print errors if needed
-    const { success, error } = await this.validate();
-    if (success === false) {
-      this.printError(error);
-      process.exit(1);
+    const helpPrinted = await this.printHelpIfNeeded()
+    if (!helpPrinted) {
+      // Perform validation, print error and stop execution if needed
+      await this.printErrorIfNeeded();
     }
 
     return this.execAction();
@@ -334,31 +342,63 @@ class Command implements BaseComponent {
     }
     if (this.options.length) {
       help += `${EOL}Options:${EOL}`;
-      help += getHelpComponents(this.options, indent);
+      help += getHelpComponentsFormatation(this.options, indent);
     }
     if (this.parameters.length) {
       help += `${EOL}Parameters:${EOL}`;
-      help += getHelpComponents(this.parameters, indent);
+      help += getHelpComponentsFormatation(this.parameters, indent);
     }
     if (this.subCommands.size) {
       help += `${EOL}Commands:${EOL}`;
-      help += getHelpComponents(Array.from(this.subCommands.values()), indent);
+      help += getHelpComponentsFormatation(Array.from(this.subCommands.values()), indent);
     }
     return help;
   }
 
-  public printHelpIfNeeded() {
+  public async printHelpIfNeeded(): Promise<boolean> {
     if (this.helpOption && this.helpOption.getValue() === true) {
-      console.log(this.getHelp());
-      process.exit(0);
+      const helpContent = this.getHelp();
+      this.printToStdOut(helpContent);
+      if (!this.noExit) {
+        process.exit(0);
+      }
+      return true;
     }
     if (this.subCommand) {
-      this.subCommand.printHelpIfNeeded()
+      return await this.subCommand.printHelpIfNeeded()
     }
+    return false;
   }
 
-  public printError(error: ValidationError) {
-    console.error(error.getOutput());
+  public async printErrorIfNeeded() {
+    const { success, error } = await this.validate();
+    if (success === false) {
+      const errorContent = error.getOutput();
+      this.printToStdErr(errorContent);
+      if (!this.noExit) {
+        process.exit(1);
+      }
+      throw new Error(errorContent);
+    }
+    return false;
+  }
+
+  public printToStdOut(content: string) {
+    this.stdOut += content;
+    console.log(this.getHelp());
+  }
+
+  public printToStdErr(content: string) {
+    this.stdErr += content;
+    console.error(this.getHelp());
+  }
+
+  public getStdOut() {
+    return this.stdOut;
+  }
+
+  public getStdErr() {
+    return this.stdErr;
   }
 }
 
