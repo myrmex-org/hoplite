@@ -1,10 +1,8 @@
-/* tslint:disable:no-console */
-
 import { EOL } from "os";
 import { ValidationError, CommandError, UnknownOptionError, UnexpectedParameterError } from "./validation";
 import { Option, OptionArg } from "./option";
 import { Parameter, ParameterArg } from "./parameter";
-import { format, getIndentation, BaseComponent } from "./utils";
+import { format, getIndentation, BaseComponent, hProcess } from "./utils";
 
 type Action = (parseResult: any) => any;
 
@@ -17,7 +15,6 @@ interface CommandArg {
   longDescription?: string;
   helpOption?: Option|OptionArg;
   action?: Action;
-  noExit?: boolean;
 }
 
 function getHelpComponentsFormatation(helpComponents: BaseComponent[], indent: string) {
@@ -49,7 +46,6 @@ class Command extends BaseComponent {
   public action: Action;
   public parseResult: any = {};
   public errors: ValidationError[];
-  private noExit: boolean;
   private stdOut: string = "";
   private stdErr: string = "";
 
@@ -62,7 +58,6 @@ class Command extends BaseComponent {
     subCommands = [],
     helpOption = { long: "help", description: "show command usage" },
     action,
-    noExit = false,
   }: CommandArg) {
     super();
     options.forEach((option) => { this.addOption(option); });
@@ -77,7 +72,6 @@ class Command extends BaseComponent {
     }
     this.setAction(action);
     this.errors = [];
-    this.noExit = noExit;
   }
 
 
@@ -149,9 +143,14 @@ class Command extends BaseComponent {
 
     // Check if the help option has been provided
     const helpPrinted = await this.printHelpIfNeeded()
-    if (!helpPrinted) {
-      // Perform validation, print error and stop execution if needed
-      await this.printErrorIfNeeded();
+    if (helpPrinted) {
+      hProcess.exit(0);
+    }
+
+    // Perform validation, print error and stop execution if needed
+    const errorPrinted = await this.printErrorIfNeeded();
+    if (errorPrinted) {
+      hProcess.exit(1);
     }
 
     return this.execAction();
@@ -237,7 +236,10 @@ class Command extends BaseComponent {
       }
     }
 
-    return { success: this.errors.length === 0, error: new CommandError(this.getName(), this.errors) };
+    if (this.errors.length === 0) {
+      return { success: true, error: undefined };
+    }
+    return { success: false, error: new CommandError(this.getName(), this.errors) };
   }
 
 
@@ -358,10 +360,7 @@ class Command extends BaseComponent {
   public async printHelpIfNeeded(): Promise<boolean> {
     if (this.helpOption && this.helpOption.getValue() === true) {
       const helpContent = this.getHelp();
-      this.printToStdOut(helpContent);
-      if (!this.noExit) {
-        process.exit(0);
-      }
+      hProcess.writeStdOut(helpContent);
       return true;
     }
     if (this.subCommand) {
@@ -370,35 +369,14 @@ class Command extends BaseComponent {
     return false;
   }
 
-  public async printErrorIfNeeded() {
+  public async printErrorIfNeeded(): Promise<boolean> {
     const { success, error } = await this.validate();
     if (success === false) {
       const errorContent = error.getOutput();
-      this.printToStdErr(errorContent);
-      if (!this.noExit) {
-        process.exit(1);
-      }
-      throw new Error(errorContent);
+      hProcess.writeStdErr(errorContent);
+      return true
     }
     return false;
-  }
-
-  public printToStdOut(content: string) {
-    this.stdOut += content;
-    console.log(this.getHelp());
-  }
-
-  public printToStdErr(content: string) {
-    this.stdErr += content;
-    console.error(this.getHelp());
-  }
-
-  public getStdOut() {
-    return this.stdOut;
-  }
-
-  public getStdErr() {
-    return this.stdErr;
   }
 }
 

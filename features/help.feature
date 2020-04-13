@@ -1,11 +1,11 @@
 Feature: Generating help flag
   A "help" flag must be automatically created for a command
 
+  @wip
   Scenario:
     Given a command line named "my-command"
-    When I call the command "my-command --help"
-    Then it should succeed
-    And the key "help" of the parse result should be set to true
+    When I execute the command "my-command --help"
+    Then it should exit without error
     And the standard output should be:
       """
 
@@ -19,9 +19,8 @@ Feature: Generating help flag
   Scenario:
     Given a command line named "my-command"
     When I add a flag "a"
-    And I call the command "my-command --help"
-    Then it should succeed
-    And the key "help" of the parse result should be set to true
+    And I execute the command "my-command --help"
+    Then it should exit without error
     And the standard output should be:
       """
 
@@ -39,9 +38,8 @@ Feature: Generating help flag
     And I add an option "foo" with a parameter "bar"
     And I add an option "qux" with a variadic parameter "quux"
     And I set its description to "give a quux value for the qux option"
-    And I call the command "my-command --help"
-    Then it should succeed
-    And the key "help" of the parse result should be set to true
+    And I execute the command "my-command --help"
+    Then it should exit without error
     And the standard output should be:
       """
 
@@ -59,9 +57,8 @@ Feature: Generating help flag
     Given a command line named "my-command"
     When I add a mandatory parameter "foo"
     And I add a variadic parameter "foo2"
-    And I call the command "my-command --help"
-    Then it should succeed
-    And the key "help" of the parse result should be set to true
+    And I execute the command "my-command --help"
+    Then it should exit without error
     And the standard output should be:
       """
 
@@ -83,9 +80,8 @@ Feature: Generating help flag
     And I add an option "bar" with a variadic parameter "multiple-bar"
     And I add a mandatory parameter "baz"
     And I add a variadic parameter "qux"
-    And I call the command "my-command --help"
-    Then it should succeed
-    And the key "help" of the parse result should be set to true
+    And I execute the command "my-command --help"
+    Then it should exit without error
     And the standard output should be:
       """
 

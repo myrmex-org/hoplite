@@ -21,7 +21,7 @@ class ValidationError {
       output += EOL + error.getOutput(indent + this.indent);
     })
     if (this.bottomMessage) {
-      output += EOL + this.bottomMessage;
+      output += EOL + this.indent + this.bottomMessage;
     }
     return indent + output;
   }

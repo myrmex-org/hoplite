@@ -24,6 +24,7 @@ interface ParameterArg {
   variadic?: boolean;
   validator?: ParameterValidator;
   getAllowedValues?: AllowedValuesRetriever;
+  allowedValues?: string[];
 }
 
 class Parameter extends BaseComponent {
@@ -42,6 +43,7 @@ class Parameter extends BaseComponent {
     variadic = false,
     validator = () => Promise.resolve({ success: true }),
     getAllowedValues = () => Promise.resolve([]),
+    allowedValues = [],
   }: ParameterArg) {
     super();
     this.name = name;
@@ -50,6 +52,10 @@ class Parameter extends BaseComponent {
     this.variadic = variadic;
     this.validator = validator;
     this.getAllowedValues = getAllowedValues;
+    if (allowedValues.length > 0) {
+      this.validator = generateSimpleValidator(allowedValues);
+      this.getAllowedValues = () => Promise.resolve(allowedValues);
+    }
     this.value = [];
   }
 
