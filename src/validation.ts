@@ -79,15 +79,6 @@ class VariadicParameterValidationError extends ValidationError {
   }
 }
 
-class ValidationResult {
-  success: boolean;
-  error?: ValidationError;
-  constructor(success: boolean, error?: ValidationError) {
-    this.success = success;
-    this.error = error;
-  }
-};
-
 export {
   ValidationError,
   UnknownOptionError,
@@ -95,5 +86,4 @@ export {
   CommandError,
   ParameterValidationError,
   VariadicParameterValidationError,
-  ValidationResult,
 };

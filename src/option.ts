@@ -1,6 +1,5 @@
 import { Parameter, ParameterArg } from "./parameter";
 import { BaseComponent } from "./utils";
-import { ValidationResult } from "./validation";
 
 interface OptionArg {
   short?: string;
@@ -74,11 +73,11 @@ class Option extends BaseComponent {
     return !!(this.parameter && this.parameter.isVariadic());
   }
 
-  public async validate(otherCommandArgumentValues?: object) {
+  public async validate(otherArgumentValues?: any) {
     if (this.parameter) {
-      return this.parameter.validate(this.getUsage(), otherCommandArgumentValues);
+      return this.parameter.validate(otherArgumentValues, this.getUsage());
     }
-    return new ValidationResult(true);
+    return true;
   }
 
   public getUsage() {

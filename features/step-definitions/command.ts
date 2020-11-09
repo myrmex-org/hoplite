@@ -98,7 +98,7 @@ When('I set its description to {string}', function (this: TestContext, descripti
  *******************************************************************************/
 
 function addParameter(this: TestContext, variadic: boolean, mandatory: boolean, name: string, allowedValues: string[]) {
-  const parameter = new Parameter({ name, mandatory, variadic, allowedValues })
+  const parameter = new Parameter({ name, mandatory, variadic, validator: allowedValues })
   this.command.addParameter(parameter);
   this.currentArgument = parameter;
 }
@@ -149,6 +149,12 @@ When('I add an option {string} with a variadic parameter {string}', function (th
   addOption.bind(this)({ short, long, parameter: { name: parameterName, variadic: true } });
 });
 
+When('I add a mandatory option {string} with a parameter {string}', function (this: TestContext, option: string, parameterName: string) {
+  const short = option.length === 1 ? option : undefined;
+  const long = option.length > 1 ? option : undefined;
+  addOption.bind(this)({ short, long, parameter: { name: parameterName }, mandatory: true });
+});
+
 
 /*******************************************************************************
  * Manage subcommand
@@ -181,6 +187,7 @@ Then('it should exit without error', function (this: TestContext, ) {
 });
 
 Then('the error output should be:', function (this: TestContext, docString: string) {
+  console.log(this.stdErr)
   expect(this.stdErr).toStrictEqual(docString);
 });
 

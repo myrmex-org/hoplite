@@ -1,30 +1,26 @@
-import { VariadicParameterValidationError, ParameterValidationError, ValidationError, ValidationResult } from "./validation";
+import { VariadicParameterValidationError, ParameterValidationError, ValidationError } from "./validation";
 import { BaseComponent } from "./utils";
 
-type ParameterValidator = (value: string, usage: string, otherCommandArgumentValues?: object) => Promise<ValidationResult|boolean>;
+type ParameterValidator = (value: string, otherArgumentValues?: any) => ValidationError|boolean|Promise<ValidationError|boolean>;
 
-const generateSimpleValidator = (allowedValues: string[]) => {
-  const validator: ParameterValidator = (value: string, usage: string) => {
+const generateSimpleValidator = (usage: string, allowedValues: string[]) => {
+  const validator: ParameterValidator = (value: string) => {
     if (!allowedValues.includes(value)) {
       return Promise.resolve(
-        new ValidationResult(false, new ParameterValidationError(usage, value, allowedValues))
+        new ParameterValidationError(usage, value, allowedValues)
       );
     }
-    return Promise.resolve(new ValidationResult(true));
+    return Promise.resolve(true);
   };
   return validator;
 };
-
-type AllowedValuesRetriever = (otherCommandArgumentValues: object) => Promise<string[]>;
 
 interface ParameterArg {
   name: string;
   description?: string;
   mandatory?: boolean;
   variadic?: boolean;
-  validator?: ParameterValidator;
-  getAllowedValues?: AllowedValuesRetriever;
-  allowedValues?: string[];
+  validator?: ParameterValidator|string[];
 }
 
 class Parameter extends BaseComponent {
@@ -32,8 +28,7 @@ class Parameter extends BaseComponent {
   public description: string;
   public mandatory: boolean;
   public variadic: boolean;
-  public validator: ParameterValidator;
-  public getAllowedValues: AllowedValuesRetriever;
+  public validator: ParameterValidator|string[];
   public value: string[];
 
   constructor({
@@ -41,9 +36,7 @@ class Parameter extends BaseComponent {
     description,
     mandatory = false,
     variadic = false,
-    validator = () => Promise.resolve({ success: true }),
-    getAllowedValues = () => Promise.resolve([]),
-    allowedValues = [],
+    validator = () => Promise.resolve(true),
   }: ParameterArg) {
     super();
     this.name = name;
@@ -51,11 +44,6 @@ class Parameter extends BaseComponent {
     this.mandatory = mandatory;
     this.variadic = variadic;
     this.validator = validator;
-    this.getAllowedValues = getAllowedValues;
-    if (allowedValues.length > 0) {
-      this.validator = generateSimpleValidator(allowedValues);
-      this.getAllowedValues = () => Promise.resolve(allowedValues);
-    }
     this.value = [];
   }
 
@@ -75,29 +63,30 @@ class Parameter extends BaseComponent {
     return this.variadic;
   }
 
-  public async validate(usage?: string, otherCommandArgumentValues?: object) {
+  public async validate(otherArgumentValues: any, usageOverride?: string) {
     const errors: ValidationError[] = [];
-    usage = usage || this.getUsage()
+    const usage = usageOverride || this.getUsage()
+    
+    // If the instance's validator is an array, we generate a simple validator from it
+    const validator = this.validator instanceof Array
+                    ? generateSimpleValidator(usage, this.validator)
+                    : this.validator;
+
     for (const value of this.value) {
-      let validationResult = await this.validator(value, usage, otherCommandArgumentValues);
-      if (typeof validationResult === 'boolean') {
-        validationResult = { success: validationResult };
-      }
-      if (validationResult.success === false) {
-        if (validationResult.error) {
-          errors.push(validationResult.error);
-        } else {
-          errors.push(new ParameterValidationError(usage, value));
-        }
+      let validationResult = await validator(value, otherArgumentValues);
+      if (validationResult === false) {
+        errors.push(new ParameterValidationError(usage, value));
+      } else if (validationResult instanceof ValidationError) {
+        errors.push(validationResult);
       }
     }
     if (errors.length > 0) {
       if (this.isVariadic() && errors.length > 1) {
-        return new ValidationResult(false, new VariadicParameterValidationError(usage, errors));
+        return new VariadicParameterValidationError(usage, errors);
       }
-      return new ValidationResult(false, errors[errors.length - 1]);
+      return errors[errors.length - 1];
     }
-    return new ValidationResult(true);
+    return true;
   }
 
   public getUsage() {
@@ -138,4 +127,4 @@ class Parameter extends BaseComponent {
 }
 
 export default Parameter;
-export { Parameter, ParameterArg, ParameterValidator, generateSimpleValidator };
+export { Parameter, ParameterArg, ParameterValidator };

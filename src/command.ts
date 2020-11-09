@@ -212,34 +212,37 @@ class Command extends BaseComponent {
     // Check if mandatory parameters are provided
     await this.checkMandatoryParameters();
 
+    // Retrieve values provided for all arguments to use for validation
+    const values = this.getValues()
+
     // Retrieve option errors
     for (const option of this.options) {
-      const validationResult = await option.validate();
-      if (validationResult.success === false) {
-        this.errors.push(validationResult.error);
+      const validationResult = await option.validate(values);
+      if (validationResult instanceof ValidationError) {
+        this.errors.push(validationResult);
       }
     }
 
     // Retrieve parameter errors
     for (const parameter of this.parameters) {
-      const validationResult = await parameter.validate();
-      if (validationResult.success === false) {
-        this.errors.push(validationResult.error);
+      const validationResult = await parameter.validate(values);
+      if (validationResult instanceof ValidationError) {
+        this.errors.push(validationResult);
       }
     }
 
     // Retrieve sub-command errors
     if (this.subCommand) {
       const validationResult = await this.subCommand.validate();
-      if (validationResult.success === false) {
-        this.errors.push(validationResult.error);
+      if (validationResult instanceof ValidationError) {
+        this.errors.push(validationResult);
       }
     }
 
     if (this.errors.length === 0) {
-      return { success: true, error: undefined };
+      return true;
     }
-    return { success: false, error: new CommandError(this.getName(), this.errors) };
+    return new CommandError(this.getName(), this.errors);
   }
 
 
@@ -370,10 +373,9 @@ class Command extends BaseComponent {
   }
 
   public async printErrorIfNeeded(): Promise<boolean> {
-    const { success, error } = await this.validate();
-    if (success === false) {
-      const errorContent = error.getOutput();
-      hProcess.writeStdErr(errorContent);
+    const validationResult = await this.validate();
+    if (validationResult !== true) {
+      hProcess.writeStdErr(validationResult.getOutput());
       return true
     }
     return false;

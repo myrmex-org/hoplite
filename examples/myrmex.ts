@@ -1,10 +1,11 @@
 #!/usr/bin/env ts-node
 /* tslint:disable:no-console */
 import { Command } from "../src/command";
-import Parameter, { generateSimpleValidator } from "../src/parameter";
+import Parameter from "../src/parameter";
 import { format } from "../src/utils";
 import getArgv from "../src/process-argv-wrapper";
 import Option from "../src/option";
+import { ValidationError, ParameterValidationError } from "../src/validation";
 
 const myrmex = new Command({
   name: `myrmex`,
@@ -14,22 +15,34 @@ const myrmex = new Command({
       long: "region",
       parameter: {
         name: "aws-region",
-        mandatory: true,
         variadic: true,
-        validator: generateSimpleValidator(["us-east-1", "us-east-2"]),
-        getAllowedValues: () => Promise.resolve(["us-east-1", "us-east-2"]),
+        validator: ["us-east-1", "us-east-2"],
       },
+      mandatory: true,
       description: "choose an AWS region",
+    }, {
+      short: "c",
+      long: "casse",
+      parameter: {
+        name: "casse",
+        validator: ["upper", "lower"],
+      },
+      mandatory: true,
+      description: "casse of environment",
     }, {
       short: "e",
       long: "environment",
       description: "select an environment",
       parameter: {
         name: "environment",
-        mandatory: true,
-        validator: generateSimpleValidator(["toto", "tata"]),
-        getAllowedValues: () => Promise.resolve(["toto", "otot"]),
+        validator: (value, otherCommandArgumentValues) => {
+          if (otherCommandArgumentValues.casse === "upper") {
+            return /^[A-Z]*$/.test(value) || new ParameterValidationError("-e, --environment <environment>", value, "The environment must be uppercase")
+          }
+          return /^[a-z]*$/.test(value) || new ParameterValidationError("-e, --environment <environment>", value, "The environment must be lowercase");
+        },
       },
+      mandatory: true,
     },
   ],
   subCommands: [
@@ -45,8 +58,7 @@ const myrmex = new Command({
           name: `plugins`,
           description: `The plugins to install`,
           variadic: true,
-          validator: generateSimpleValidator(["@myrmex/lambda", "@myrmex/api-gateway"]),
-          getAllowedValues: () => Promise.resolve(["@myrmex/lambda", "@myrmex/api-gateway"]),
+          validator: ["@myrmex/lambda", "@myrmex/api-gateway"],
         },
       ],
       action: (result) => {
@@ -54,48 +66,7 @@ const myrmex = new Command({
         console.log(result);
         console.log("done");
       },
-    }), {
-      name: "completion",
-      parameters: [
-        {
-          name: `current-prompt-content`,
-          description: `The current content typed in the prompt.`,
-          mandatory: true,
-        },
-        {
-          name: `cursor-position`,
-          description: `Index of the word where the cursor is positioned.`,
-          mandatory: true,
-        },
-      ],
-      action: async function (parseResult) {
-        // console.log(parseResult);
-        const promptContent = parseResult["current-prompt-content"].substring(0, parseResult["current-prompt-content"].lastIndexOf(" "))
-        const argv = (await getArgv(promptContent)).slice(0, parseInt(parseResult["cursor-position"], 10) + 2);
-        // console.log(argv.join('#####'));
-        // console.log(parseResult["cursor-position"])
-        const command = this.parentCommand as Command;
-        // console.log(argv)
-        const autoCompletionElement = await command.getAutoCompletionElement(argv);
-        // console.log(`XXX` + autoCompletionElement.getName())
-        // console.log(autoCompletionElement)
-        if (autoCompletionElement instanceof Command) {
-          // console.log("COMMAND");
-          const options = autoCompletionElement.options.map((o) => o.long ? `--${o.long}` : `-${o.short}`);
-          const subCommands = Array.from(autoCompletionElement.subCommands.values()).map((sc) => sc.name);
-          console.log([...options, ...subCommands].join(" "));
-        } else if (autoCompletionElement instanceof Parameter) {
-          // console.log("PARAMETER");
-          console.log((await autoCompletionElement.getAllowedValues({})).join(' '));
-        } else if (autoCompletionElement instanceof Option && autoCompletionElement.parameter) {
-          // console.log("OPTION_WITH_PARAMETER");
-          console.log((await autoCompletionElement.parameter.getAllowedValues({})).join(' '));
-        } else {
-          // console.log("NOTHING")
-        }
-        process.exit(0);
-      },
-    },
+    }),
   ],
   description: "Create and manage a Myrmex project",
   longDescription: "This command allows to create a Myrmex project.\nWhen executed in a Myrmex project, it is enriched by module sub-commands",
@@ -114,8 +85,6 @@ const lambda = new Command({
             name: "function-identifier",
             mandatory: true,
             variadic: true,
-            // validator: async (parameterValue) => ["abc", "def"].includes(parameterValue),
-            getAllowedValues: () => Promise.resolve(["abc", "def"]),
           },
         },
       ],

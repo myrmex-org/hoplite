@@ -1,4 +1,4 @@
-import { ValidationResult } from "./validation";
+import { ValidationError } from "./validation";
 
 let indentation: string = `  `;
 let colorEnabled: boolean = true;
@@ -83,7 +83,7 @@ interface HelpParts {
 abstract class BaseComponent {
   public description?: string;
   public abstract getHelpParts(): HelpParts;
-  public abstract validate(): Promise<ValidationResult>;
+  public abstract validate(otherArgumentValues: any, usageOverride?: string): Promise<boolean|ValidationError>;
   public setDescription(description: string): BaseComponent {
     this.description = description;
     return this;

@@ -46,6 +46,17 @@ Feature: A command with options
     And the key "b" of the parse result should be set to true
     And the key "c" of the parse result should be set to false
 
+  Scenario: An option with a mandatory parameter is not provided
+    Given a command line named "my-command"
+    When I add a mandatory option "a" with a parameter "aaa"
+    And I execute the command "my-command"
+    Then it should fail
+    And the error output should be:
+      """
+      An error occured in command my-command:
+          The option -a <aaa> is mandatory for command my-command
+      """
+
   Scenario: An option with a parameter is not provided
     Given a command line named "my-command"
     When I add an option "a" with a parameter "aaa"
