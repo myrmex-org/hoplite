@@ -1,36 +1,35 @@
-import { ParameterValidationError } from "./errors";
-import { HelpComponent } from "./utils";
+import { VariadicParameterValidationError, ParameterValidationError, ValidationError } from "./validation";
+import { BaseComponent } from "./utils";
 
-type ParameterValidator = (parameterValue: string, parameterKey?: string, parseResult?: any) => Promise<boolean>;
+type ParameterValidator = (value: string, otherArgumentValues?: any) => ValidationError|boolean|Promise<ValidationError|boolean>;
 
-const simpleValidator = (allowedValues: string[]) => {
-  const validator: ParameterValidator = (parameterValue: string, parameterKey: string) => {
-    if (!allowedValues.includes(parameterValue)) {
-      return Promise.reject(new ParameterValidationError(parameterValue, parameterKey, allowedValues));
+const generateSimpleValidator = (usage: string, allowedValues: string[]) => {
+  const validator: ParameterValidator = (value: string) => {
+    if (!allowedValues.includes(value)) {
+      return Promise.resolve(
+        new ParameterValidationError(usage, value, allowedValues)
+      );
     }
     return Promise.resolve(true);
   };
   return validator;
 };
 
-type AllowedValuesRetriever = () => Promise<string[]>;
-
 interface ParameterArg {
   name: string;
   description?: string;
   mandatory?: boolean;
   variadic?: boolean;
-  validator?: ParameterValidator;
-  getAllowedValues?: AllowedValuesRetriever;
+  validator?: ParameterValidator|string[];
 }
 
-class Parameter implements HelpComponent {
-  public name: string;
-  public description: string;
-  public mandatory: boolean;
-  public variadic: boolean;
-  public validator: ParameterValidator;
-  public getAllowedValues: AllowedValuesRetriever;
+class Parameter extends BaseComponent {
+  protected name: string;
+  protected description: string;
+  protected mandatory: boolean;
+  protected variadic: boolean;
+  protected validator: ParameterValidator|string[];
+  protected value: string[];
 
   constructor({
     name,
@@ -38,14 +37,14 @@ class Parameter implements HelpComponent {
     mandatory = false,
     variadic = false,
     validator = () => Promise.resolve(true),
-    getAllowedValues = () => Promise.resolve([]),
   }: ParameterArg) {
+    super();
     this.name = name;
     this.description = description;
     this.mandatory = mandatory;
     this.variadic = variadic;
     this.validator = validator;
-    this.getAllowedValues = getAllowedValues;
+    this.value = [];
   }
 
   public getName() {
@@ -56,12 +55,48 @@ class Parameter implements HelpComponent {
     return this.mandatory;
   }
 
+  public setAsMandatory(value: boolean) {
+    this.mandatory = value;
+  }
+
   public isVariadic() {
     return this.variadic;
   }
 
-  public validate(value: string, usage?: string, parseResult?: any) {
-    return this.validator(value, usage || this.getUsage(), parseResult);
+  public async validate(otherArgumentValues: any, usageOverride?: string, forceToDefine: boolean = false) {
+    const errors: ValidationError[] = [];
+    const usage = usageOverride || this.getUsage()
+    
+    // If the instance's validator is an array, we generate a simple validator from it
+    const validator = this.validator instanceof Array
+                    ? generateSimpleValidator(usage, this.validator)
+                    : this.validator;
+
+    for (const value of this.value) {
+      let validationResult = await validator(value, otherArgumentValues);
+      if (validationResult === false) {
+        errors.push(new ParameterValidationError(usage, value));
+      } else if (validationResult instanceof ValidationError) {
+        errors.push(validationResult);
+      }
+    }
+
+    if (forceToDefine && this.value.length === 0) {
+      let validationResult = await validator(undefined, otherArgumentValues);
+      if (validationResult === true) {
+        errors.push(new ParameterValidationError(usage, undefined));
+      } else if (validationResult instanceof ValidationError) {
+        errors.push(validationResult);
+      }
+    }
+    
+    if (errors.length > 0) {
+      if (this.isVariadic() && errors.length > 1) {
+        return new VariadicParameterValidationError(usage, errors);
+      }
+      return errors[errors.length - 1];
+    }
+    return true;
   }
 
   public getUsage() {
@@ -75,7 +110,31 @@ class Parameter implements HelpComponent {
   public getHelpParts() {
     return { usage: this.getUsage(), description: this.description };
   }
+
+  public setValue(value: string) {
+    this.value.push(value);
+    return this;
+  }
+
+  public getValue() {
+    if (this.isVariadic()) {
+      return this.value;
+    } else {
+      return this.value[this.value.length - 1];
+    }
+  }
+
+  public isSet() {
+    if (this.isVariadic()) {
+      return this.getValue().length > 0;
+    }
+    return this.getValue() !== undefined;
+  }
+
+  public toString() {
+    return `Parameter ${this.getUsage()}`;
+  }
 }
 
 export default Parameter;
-export { Parameter, ParameterArg, ParameterValidator, simpleValidator };
+export { Parameter, ParameterArg, ParameterValidator };

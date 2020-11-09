@@ -1,9 +1,8 @@
-/* tslint:disable:no-console */
 import { EOL } from "os";
-import { HopliteError, SubCommandError, UnknownOptionError } from "./errors";
+import { ValidationError, CommandError, UnknownOptionError, UnexpectedParameterError, MandatoryOptionError, MandatoryParameterError } from "./validation";
 import { Option, OptionArg } from "./option";
 import { Parameter, ParameterArg } from "./parameter";
-import { format, getIndentation, HelpComponent } from "./utils";
+import { format, getIndentation, BaseComponent, hProcess } from "./utils";
 
 type Action = (parseResult: any) => any;
 
@@ -14,34 +13,41 @@ interface CommandArg {
   name: string;
   description?: string;
   longDescription?: string;
-  helpOption?: OptionArg;
+  helpOption?: Option|OptionArg;
   action?: Action;
 }
 
-function getHelpComponents(helpComponents: HelpComponent[], indent: string) {
+function getHelpComponentsFormatation(helpComponents: BaseComponent[], indent: string) {
   let output = ``;
   const helpParts = helpComponents.map((hc) => hc.getHelpParts());
   const usagePartSize = Math.max(...helpParts.map((parts) => parts.usage.length)) + 3;
   helpParts.forEach((hp) => {
-    output += `${indent}${hp.usage.padEnd(usagePartSize)} ${hp.description || ``}${EOL}`;
+    if (hp.description) {
+      output += `${indent}${hp.usage.padEnd(usagePartSize)} ${hp.description}${EOL}`;
+    } else {
+      output += `${indent}${hp.usage}${EOL}`;
+    }
   });
   return output;
 }
 
-class Command implements HelpComponent {
-  public execPath: string;
-  public scriptPath: string;
-  public name: string;
-  public description: string;
-  public longDescription: string;
-  public options: Option[] = [];
-  public parameters: Parameter[] = [];
-  public subCommands: Map<string, Command> = new Map();
-  public parentCommand: Command;
-  public helpOptions: string[] = [];
+class Command extends BaseComponent {
+  protected execPath: string;
+  protected scriptPath: string;
+  protected name: string;
+  protected description: string;
+  protected longDescription: string;
+  protected options: Option[] = [];
+  protected parameters: Parameter[] = [];
+  protected subCommands: Map<string, Command> = new Map();
+  protected subCommand: Command;
+  protected parentCommand: Command;
+  protected helpOption: Option;
   public action: Action;
-  public parseResult: any = {};
-  public errors: HopliteError[];
+  protected parseResult: any = {};
+  protected errors: ValidationError[];
+  protected stdOut: string = "";
+  protected stdErr: string = "";
 
   constructor({
     name,
@@ -53,6 +59,7 @@ class Command implements HelpComponent {
     helpOption = { long: "help", description: "show command usage" },
     action,
   }: CommandArg) {
+    super();
     options.forEach((option) => { this.addOption(option); });
     parameters.forEach((parameter) => { this.addParameter(parameter); });
     subCommands.forEach((subCommand) => { this.addSubCommand(subCommand); });
@@ -60,21 +67,17 @@ class Command implements HelpComponent {
     this.description = description;
     this.longDescription = longDescription;
     if (helpOption) {
-      if (helpOption.short) {
-        this.helpOptions.push(helpOption.short);
-      }
-      if (helpOption.long) {
-        this.helpOptions.push(helpOption.long);
-      }
-      this.addOption(helpOption);
+      this.helpOption = helpOption instanceof Option ? helpOption : new Option(helpOption),
+      this.addOption(this.helpOption);
     }
     this.setAction(action);
     this.errors = [];
   }
 
-  public getName() {
-    return this.name
-  }
+
+  /***************************************************************
+   * Methods to build the command
+   ***************************************************************/
 
   public addOption(option: Option|OptionArg) {
     this.options.push(option instanceof Option ? option : new Option(option));
@@ -98,188 +101,212 @@ class Command implements HelpComponent {
     this.action = action;
   }
 
-  public async getAutoCompletionElement(argv: string[]): Promise<Command|Option|Parameter> {
-    if (!this.parentCommand) {
-      this.execPath = argv.shift();
-      this.scriptPath = argv.shift();
-    }
-
-    // if (argv.length <= 1) {
-    //   return this;
-    // }
-
-    // Iterate through command arguments
-    while (argv.length > 1) {
-      const currentArgument = await this.processNextArgument(argv);
-      if (currentArgument instanceof Command) {
-        return currentArgument.getAutoCompletionElement(argv);
+  public getCurrentParameter() {
+    for (const parameter of this.parameters) {
+      if (!parameter.isSet() || parameter.isVariadic()) {
+        return parameter
       }
     }
-
-    const argument = await this.processNextArgument(argv);
-    if (argument instanceof Option && !argument.parameter) {
-      return this
-    }
-    return argument || this;
   }
 
-  public async parse(argv: string[]): Promise<any> {
+
+  /***************************************************************
+   * Methods to parse the command input
+   ***************************************************************/
+
+  public setValuesAndGetCurrentArgument(argv: string[]): BaseComponent {
     if (!this.parentCommand) {
       this.execPath = argv.shift();
       this.scriptPath = argv.shift();
-    } else {
-      this.parseResult.parentCommand = this.parentCommand.parseResult;
     }
+
+    let currentArgument: BaseComponent = this;
 
     // Iterate through command arguments
     while (argv.length > 0) {
-      const currentArgument = await this.processNextArgument(argv);
-      if (currentArgument instanceof Command) {
-        try {
-          await currentArgument.parse(argv);
-        } catch (err) {
-          if (err instanceof HopliteError) {
-            this.errors.push(err);
-          } else {
-            throw err;
-          }
-        }
-      }
+      currentArgument = this.processNextArgument(argv);
     }
 
-    // Check if the help option has been provided
-    this.helpOptions.forEach((option) => {
-      if (this.parseResult.hasOwnProperty(option)) {
-        console.log(this.getHelp());
-        process.exit(0);
-      }
-    });
-
-    // Check if required options are provided
-    await this.checkOptions();
-
-    // Check if required parameters are provided
-    await this.checkParameters();
-
-    // Print errors if needed
-    if (this.errors.length) {
-      if (this.parentCommand) {
-        throw new SubCommandError(this.getInvocation(), this.errors);
-      }
-      this.printErrors();
-      process.exit(1);
-    }
-
-    // Execute the action function
-    if (this.action) {
-      return this.action(this.parseResult);
-    }
-    return this.parseResult;
-  }
-
-  public async processNextArgument(argv: string[]) {
-    const parameters = [...this.parameters];
-    const arg = argv.shift();
-    let currentArgument;
-    if (/^-[a-zA-Z]+$/.test(arg)) {
-      // One or more short options
-      currentArgument = await this.processShortOptions(arg, argv);
-    } else if (/^--[a-zA-Z][a-zA-Z0-9]+$/.test(arg)) {
-      // A long option
-      currentArgument = await this.processOption(arg.substr(2), arg, argv);
-    } else if (this.subCommands.has(arg)) {
-      // A sub-command
-      currentArgument = await this.processSubCommand(arg, argv);
-    } else if (parameters.length > 0) {
-      // One or more parameters
-      currentArgument = await this.processParameters(parameters, arg, argv);
-    } else {
-      this.errors.push(new HopliteError(`Unexpected parameter "${arg}"`));
+    if (currentArgument instanceof Option && !currentArgument.hasParameter()) {
+      return this
     }
     return currentArgument;
   }
 
-  public async processShortOptions(arg: string, argv: string[]) {
+  public async getAutoCompletionElement(argv: string[]): Promise<BaseComponent> {
+    const currentArgument = this.setValuesAndGetCurrentArgument(argv);
+    return currentArgument;
+  }
+
+  public async parse(argv: string[]): Promise<any> {
+    this.setValuesAndGetCurrentArgument(argv);
+
+    // Check if the help option has been provided
+    const helpPrinted = await this.printHelpIfNeeded()
+    if (helpPrinted) {
+      hProcess.exit(0);
+    }
+
+    // Perform validation, print error and stop execution if needed
+    const errorPrinted = await this.printErrorIfNeeded();
+    if (errorPrinted) {
+      hProcess.exit(1);
+    }
+
+    return this.execAction();
+  }
+
+  public getValues() {
+    const values: any = {};
+    if (this.parentCommand) {
+      values._ = this.parentCommand.getValues();
+    }
+    this.options.forEach(option => {
+      values[option.getName()] = option.getValue();
+    });
+    this.parameters.forEach(parameter => {
+      values[parameter.getName()] = parameter.getValue();
+    });
+    return values;
+  }
+
+  public execAction(): any {
+    if (this.subCommand) {
+      return this.subCommand.execAction();
+    }
+    if (this.action) {
+      return this.action(this.getValues());
+    }
+    return this.getValues();
+  }
+
+
+  /***************************************************************
+   * Methods to validate the command
+   ***************************************************************/
+
+  private async checkMandatoryOptions() {
+    this.options.forEach((option) => {
+      if (option.isMandatory() && !option.isSet()) {
+        this.errors.push(new MandatoryOptionError(option.getUsage()));
+      }
+    });
+  }
+
+  private async checkMandatoryParameters() {
+    this.parameters.forEach((parameter) => {
+      if (parameter.isMandatory() && !parameter.isSet()) {
+        this.errors.push(new MandatoryParameterError(parameter.getUsage()));
+      }
+    });
+  }
+
+  public async validate() {
+    // Check if mandatory options are provided
+    await this.checkMandatoryOptions();
+
+    // Check if mandatory parameters are provided
+    await this.checkMandatoryParameters();
+
+    // Retrieve values provided for all arguments to use for validation
+    const values = this.getValues()
+
+    // Retrieve option errors
+    for (const option of this.options) {
+      const validationResult = await option.validate(values);
+      if (validationResult instanceof ValidationError) {
+        this.errors.push(validationResult);
+      }
+    }
+
+    // Retrieve parameter errors
+    for (const parameter of this.parameters) {
+      const validationResult = await parameter.validate(values);
+      if (validationResult instanceof ValidationError) {
+        this.errors.push(validationResult);
+      }
+    }
+
+    // Retrieve sub-command errors
+    if (this.subCommand) {
+      const validationResult = await this.subCommand.validate();
+      if (validationResult instanceof ValidationError) {
+        this.errors.push(validationResult);
+      }
+    }
+
+    if (this.errors.length === 0) {
+      return true;
+    }
+    return new CommandError(this.getName(), this.errors);
+  }
+
+
+  /***************************************************************
+   * Methods to set values the command parts
+   ***************************************************************/
+
+  public processNextArgument(argv: string[]) {
+    const arg = argv.shift();
+    let currentArgument;
+    if (/^-[a-zA-Z]+$/.test(arg)) {
+      // One or more short options
+      currentArgument = this.processShortOptions(arg, argv);
+    } else if (/^--[a-zA-Z][a-zA-Z0-9]+$/.test(arg)) {
+      // A long option
+      currentArgument = this.processOption(arg.substr(2), arg, argv);
+    } else if (this.subCommands.has(arg)) {
+      // A sub-command
+      currentArgument = this.processSubCommand(arg, argv);
+    } else {
+      // A parameter
+      currentArgument = this.processParameters(arg, argv);
+    }
+    return currentArgument;
+  }
+
+  public processShortOptions(arg: string, argv: string[]) {
     let option;
     for (let i = 1; i < arg.length; i++) {
-      option = await this.processOption(arg.charAt(i), arg, argv);
+      option = this.processOption(arg.charAt(i), arg, argv);
     }
     return option;
   }
 
-  public async processOption(name: string, arg: string, argv: string[]) {
-    let option;
-    try {
-      option = this.options.find((o) => {
-        return o.short === name || o.long === name;
-      });
-      if (!option) { throw new UnknownOptionError(name, arg); }
-      const optionKey = option.long || option.short;
-      const optionValue = await option.resolve(argv, this.parseResult);
-      if (option.doesAcceptMultipleValues()) {
-        this.parseResult[optionKey] = this.parseResult[optionKey] || [];
-        this.parseResult[optionKey].push(optionValue);
-      } else {
-        this.parseResult[optionKey] = optionValue;
-      }
-    } catch (err) {
-      if (err instanceof HopliteError) {
-        this.errors.push(err);
-      } else {
-        throw err;
-      }
+  public processOption(name: string, arg: string, argv: string[]) {
+    const option = this.options.find((o) => {
+      return o.getShort() === name || o.getLong() === name;
+    });
+    if (!option) {
+      this.errors.push(new UnknownOptionError(name, arg));
+      return this;
     }
+    option.setValue(argv);
     return option;
   }
 
-  public async processSubCommand(arg: string, argv: string[]) {
-    return this.subCommands.get(arg);
+  public processSubCommand(arg: string, argv: string[]) {
+    this.subCommand = this.subCommands.get(arg);
+    return this.subCommand.setValuesAndGetCurrentArgument(argv);
   }
 
-  public async processParameters(parameters: Parameter[], arg: string, argv: string[]): Promise<void|Command|Parameter> {
-    const currentParameter = parameters[0];
-    try {
-      await currentParameter.validate(arg, undefined, this.parseResult);
-    } catch (err) {
-      if (err instanceof HopliteError) {
-        this.errors.push(err);
-      } else {
-        throw err;
-      }
+  public processParameters(arg: string, argv: string[]) {
+    const currentParameter = this.getCurrentParameter();
+    if (!currentParameter) {
+      this.errors.push(new UnexpectedParameterError(arg));
+      return this;
     }
-    if (currentParameter.isVariadic()) {
-      this.parseResult[currentParameter.getName()] = this.parseResult[currentParameter.getName()] || [];
-      this.parseResult[currentParameter.getName()].push(arg);
-    } else {
-      this.parseResult[currentParameter.getName()] = arg;
-      parameters.shift();
-    }
-    if (argv.length > 0) {
-      const nextArg = argv.shift();
-      return await this.processParameters(parameters, nextArg, argv);
-    }
+    currentParameter.setValue(arg);
     return currentParameter;
   }
 
 
-  public async checkOptions() {
-    this.options.forEach((option) => {
-      if (option.isMandatory() && !this.parseResult[option.getName()]) {
-        this.errors.push(new HopliteError(
-          `The option ${format.cmd(option.getUsage())} is ${format.error(`mandatory`)} for command ${format.cmd(this.getInvocation())}`,
-        ));
-      }
-    });
-  }
+  /***************************************************************
+   * Methods to print information for the end user
+   ***************************************************************/
 
-  public async checkParameters() {
-    this.parameters.forEach((parameter) => {
-      if (parameter.isMandatory() && !this.parseResult[parameter.getName()]) {
-        this.errors.push(new HopliteError(
-          `The parameter ${format.cmd(parameter.getUsage())} is ${format.error(`mandatory`)} for command ${format.cmd(this.getInvocation())}`,
-        ));
-      }
-    });
+  public getName() {
+    return this.name
   }
 
   public getInvocation(): string {
@@ -310,31 +337,44 @@ class Command implements HelpComponent {
     if (this.description) {
       help += `${EOL}${this.description}${EOL}`;
     }
+    help += `${EOL}Usage: ${format.cmd(this.getUsage())}${EOL}`
     if (this.longDescription) {
       help += `${EOL}${this.longDescription}${EOL}`;
     }
     if (this.options.length) {
       help += `${EOL}Options:${EOL}`;
-      help += getHelpComponents(this.options, indent);
+      help += getHelpComponentsFormatation(this.options, indent);
     }
     if (this.parameters.length) {
       help += `${EOL}Parameters:${EOL}`;
-      help += getHelpComponents(this.parameters, indent);
+      help += getHelpComponentsFormatation(this.parameters, indent);
     }
     if (this.subCommands.size) {
       help += `${EOL}Commands:${EOL}`;
-      help += getHelpComponents(Array.from(this.subCommands.values()), indent);
+      help += getHelpComponentsFormatation(Array.from(this.subCommands.values()), indent);
     }
-    return `${EOL}${EOL}Usage: ${format.cmd(this.getUsage())}${EOL}${EOL}${help}`;
+    return help;
   }
 
-  public printErrors() {
-    const indent = getIndentation();
-    let message = `${EOL}${this.errors.length === 1 ? `An error` : `Some errors`} occured:${EOL}${EOL}`;
-    this.errors.forEach((err) => {
-      message += `${indent}${err.message}${EOL}`;
-    });
-    console.error(message);
+  public async printHelpIfNeeded(): Promise<boolean> {
+    if (this.helpOption && this.helpOption.getValue() === true) {
+      const helpContent = this.getHelp();
+      hProcess.writeStdOut(helpContent);
+      return true;
+    }
+    if (this.subCommand) {
+      return await this.subCommand.printHelpIfNeeded()
+    }
+    return false;
+  }
+
+  public async printErrorIfNeeded(): Promise<boolean> {
+    const validationResult = await this.validate();
+    if (validationResult !== true) {
+      hProcess.writeStdErr(validationResult.getOutput());
+      return true
+    }
+    return false;
   }
 }
 
