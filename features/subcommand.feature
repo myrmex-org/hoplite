@@ -37,9 +37,10 @@ Feature: A command with subcommands
       """
       An error occured in command my-command:
           Some errors occured in command my-subcommand:
-              Unknown option b in -b
-              The parameter <qux> is mandatory for command my-command my-subcommand
-              The parameter <quux...> is mandatory for command my-command my-subcommand
+              Unknown option b in -b.
+              The parameter <qux> is mandatory.
+              The parameter <quux...> is mandatory.
+              A value must be provided for --foo <bar>.
       """
 
   Scenario: A subcommand with a subcommand with options and parameters is provided

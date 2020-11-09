@@ -13,7 +13,7 @@ const pizza = new Command({
       description: "Select the base of the pizza",
       mandatory: true,
       parameter: {
-        name: "base",
+        name: "tomato|cream",
         validator: ["tomato", "cream"],
       },
     }, {
@@ -21,6 +21,7 @@ const pizza = new Command({
       long: "tomato",
       description: "Choose if you want tomato",
     }, {
+      short: "p",
       long: "peppers",
       description: "Select the kind of pepper you want",
       parameter: {
@@ -60,6 +61,13 @@ const pizza = new Command({
           }
         }
       }
+    }, {
+      short: "n",
+      long: "name",
+      description: "Choose a name for your pizza",
+      parameter: {
+        name: "my-very-cool-name",
+      },
     },
   ],
   description: "Create your own pizza",

@@ -10,12 +10,13 @@ interface OptionArg {
 }
 
 class Option extends BaseComponent {
-  public short?: string;
-  public long?: string;
-  public description?: string;
-  public mandatory?: boolean;
-  public parameter?: Parameter;
-  public value: boolean;
+  protected short?: string;
+  protected long?: string;
+  protected description?: string;
+  protected mandatory?: boolean;
+  protected parameter?: Parameter;
+  protected value: boolean;
+  protected setWithoutParameter: boolean;
 
   constructor({
     short,
@@ -37,11 +38,16 @@ class Option extends BaseComponent {
       this.parameter.setAsMandatory(true);
     }
     this.value = false;
+    this.setWithoutParameter = false;
   }
 
   public setValue(argv: string[]) {
     if (this.parameter) {
-      this.parameter.setValue(argv.shift());
+      if (argv.length === 0) {
+        this.setWithoutParameter = true;
+      } else {
+        this.parameter.setValue(argv.shift());
+      }
     } else {
       this.value = true;
     }
@@ -54,11 +60,23 @@ class Option extends BaseComponent {
     return this.value;
   }
 
-  public hasValue() {
+  public isSet() {
     if (this.parameter) {
-      return this.parameter.hasValue();
+      return this.setWithoutParameter || this.parameter.isSet();
     }
     return this.value !== undefined;
+  }
+
+  public hasParameter() {
+    return this.parameter instanceof Parameter;
+  }
+
+  public getShort() {
+    return this.short;
+  }
+
+  public getLong() {
+    return this.long;
   }
 
   public getName() {
@@ -75,7 +93,7 @@ class Option extends BaseComponent {
 
   public async validate(otherArgumentValues?: any) {
     if (this.parameter) {
-      return this.parameter.validate(otherArgumentValues, this.getUsage());
+      return this.parameter.validate(otherArgumentValues, this.getUsage(), this.setWithoutParameter);
     }
     return true;
   }

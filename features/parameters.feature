@@ -10,7 +10,7 @@ Feature: A command with parameters
     And the error output should be:
       """
       An error occured in command my-command:
-          Unexpected parameter bar
+          Unexpected parameter bar.
       """
 
   Scenario: A simple optional parameter is not provided
@@ -35,7 +35,7 @@ Feature: A command with parameters
     And the error output should be:
       """
       An error occured in command my-command:
-          The parameter <foo> is mandatory for command my-command
+          The parameter <foo> is mandatory.
       """
 
   Scenario: A simple mandatory parameter is provided
@@ -61,7 +61,6 @@ Feature: A command with parameters
     Then it should succeed
     And the key "foo" of the parse result should be set to "bar"
 
-  @wip
   Scenario: A simple optional parameter with validation is provided with a bad value
     Given a command line named "my-command"
     When I add a parameter "foo" that accepts values "bar,baz,qux"
@@ -106,7 +105,7 @@ Feature: A command with parameters
     And the error output should be:
       """
       An error occured in command my-command:
-          The parameter <foo...> is mandatory for command my-command
+          The parameter <foo...> is mandatory.
       """
 
   Scenario: A variadic mandatory parameter is provided with one value

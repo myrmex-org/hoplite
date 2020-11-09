@@ -1,5 +1,5 @@
 import { EOL } from "os";
-import { ValidationError, CommandError, UnknownOptionError, UnexpectedParameterError } from "./validation";
+import { ValidationError, CommandError, UnknownOptionError, UnexpectedParameterError, MandatoryOptionError, MandatoryParameterError } from "./validation";
 import { Option, OptionArg } from "./option";
 import { Parameter, ParameterArg } from "./parameter";
 import { format, getIndentation, BaseComponent, hProcess } from "./utils";
@@ -32,22 +32,22 @@ function getHelpComponentsFormatation(helpComponents: BaseComponent[], indent: s
 }
 
 class Command extends BaseComponent {
-  public execPath: string;
-  public scriptPath: string;
-  public name: string;
-  public description: string;
-  public longDescription: string;
-  public options: Option[] = [];
-  public parameters: Parameter[] = [];
-  public subCommands: Map<string, Command> = new Map();
-  public subCommand: Command;
-  public parentCommand: Command;
-  public helpOption: Option;
+  protected execPath: string;
+  protected scriptPath: string;
+  protected name: string;
+  protected description: string;
+  protected longDescription: string;
+  protected options: Option[] = [];
+  protected parameters: Parameter[] = [];
+  protected subCommands: Map<string, Command> = new Map();
+  protected subCommand: Command;
+  protected parentCommand: Command;
+  protected helpOption: Option;
   public action: Action;
-  public parseResult: any = {};
-  public errors: ValidationError[];
-  private stdOut: string = "";
-  private stdErr: string = "";
+  protected parseResult: any = {};
+  protected errors: ValidationError[];
+  protected stdOut: string = "";
+  protected stdErr: string = "";
 
   constructor({
     name,
@@ -103,7 +103,7 @@ class Command extends BaseComponent {
 
   public getCurrentParameter() {
     for (const parameter of this.parameters) {
-      if (!parameter.hasValue() || parameter.isVariadic()) {
+      if (!parameter.isSet() || parameter.isVariadic()) {
         return parameter
       }
     }
@@ -127,7 +127,7 @@ class Command extends BaseComponent {
       currentArgument = this.processNextArgument(argv);
     }
 
-    if (currentArgument instanceof Option && !currentArgument.parameter) {
+    if (currentArgument instanceof Option && !currentArgument.hasParameter()) {
       return this
     }
     return currentArgument;
@@ -187,20 +187,16 @@ class Command extends BaseComponent {
 
   private async checkMandatoryOptions() {
     this.options.forEach((option) => {
-      if (option.isMandatory() && !option.hasValue()) {
-        this.errors.push(new ValidationError(
-          `The option ${format.cmd(option.getUsage())} is ${format.error(`mandatory`)} for command ${format.cmd(this.getInvocation())}`,
-        ));
+      if (option.isMandatory() && !option.isSet()) {
+        this.errors.push(new MandatoryOptionError(option.getUsage()));
       }
     });
   }
 
   private async checkMandatoryParameters() {
     this.parameters.forEach((parameter) => {
-      if (parameter.isMandatory() && !parameter.hasValue()) {
-        this.errors.push(new ValidationError(
-          `The parameter ${format.cmd(parameter.getUsage())} is ${format.error(`mandatory`)} for command ${format.cmd(this.getInvocation())}`,
-        ));
+      if (parameter.isMandatory() && !parameter.isSet()) {
+        this.errors.push(new MandatoryParameterError(parameter.getUsage()));
       }
     });
   }
@@ -279,7 +275,7 @@ class Command extends BaseComponent {
 
   public processOption(name: string, arg: string, argv: string[]) {
     const option = this.options.find((o) => {
-      return o.short === name || o.long === name;
+      return o.getShort() === name || o.getLong() === name;
     });
     if (!option) {
       this.errors.push(new UnknownOptionError(name, arg));

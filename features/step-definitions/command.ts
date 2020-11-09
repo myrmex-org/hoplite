@@ -156,6 +156,13 @@ When('I add a mandatory option {string} with a parameter {string}', function (th
 });
 
 
+When('I add an option {string} with a parameter {string} that accepts values {string}', function (this: TestContext, option: string, parameterName: string, allowedValues: string) {
+  const short = option.length === 1 ? option : undefined;
+  const long = option.length > 1 ? option : undefined;
+  addOption.bind(this)({ short, long, parameter: { name: parameterName, validator: allowedValues.split(',')  } });
+});
+
+
 /*******************************************************************************
  * Manage subcommand
  *******************************************************************************/

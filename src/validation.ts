@@ -29,13 +29,25 @@ class ValidationError {
 
 class UnknownOptionError extends ValidationError {
   constructor(optionName: string, arg: string) {
-    super(`Unknown option ${format.error(optionName)} in ${format.error(arg)}`);
+    super(`Unknown option ${format.error(optionName)} in ${format.error(arg)}.`);
   }
 }
 
 class UnexpectedParameterError extends ValidationError {
   constructor(value: string) {
-    super(`Unexpected parameter ${format.error(value)}`);
+    super(`Unexpected parameter ${format.error(value)}.`);
+  }
+}
+
+class MandatoryOptionError extends ValidationError {
+  constructor(optionUsage: string) {
+    super(`The option ${format.cmd(optionUsage)} is ${format.error(`mandatory`)}.`)
+  }
+}
+
+class MandatoryParameterError extends ValidationError {
+  constructor(parameterUsage: string) {
+    super(`The parameter ${format.cmd(parameterUsage)} is ${format.error(`mandatory`)}.`)
   }
 }
 
@@ -49,8 +61,13 @@ class CommandError extends ValidationError {
 class ParameterValidationError extends ValidationError {
   public value: string;
   constructor(usage: string, value: string, allowedValues?: string|string[]) {
-    let message = `${format.error(value)} is not a correct value for ${format.cmd(usage)}.`;
+    let message: string;
     let bottomMessage: string;
+    if (value === undefined) {
+      message = `A value must be provided for ${format.cmd(usage)}.`;
+    } else {
+      message = `${format.error(value)} is not a correct value for ${format.cmd(usage)}.`;
+    }
     if (Array.isArray(allowedValues)) {
       bottomMessage = `Allowed values: ${allowedValues.map((v) => format.info(v)).join(`, `)}.`;
     } else if (allowedValues) {
@@ -83,6 +100,8 @@ export {
   ValidationError,
   UnknownOptionError,
   UnexpectedParameterError,
+  MandatoryOptionError,
+  MandatoryParameterError,
   CommandError,
   ParameterValidationError,
   VariadicParameterValidationError,

@@ -1,7 +1,6 @@
 Feature: Generating help flag
   A "help" flag must be automatically created for a command
 
-  @wip
   Scenario:
     Given a command line named "my-command"
     When I execute the command "my-command --help"

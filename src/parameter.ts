@@ -24,12 +24,12 @@ interface ParameterArg {
 }
 
 class Parameter extends BaseComponent {
-  public name: string;
-  public description: string;
-  public mandatory: boolean;
-  public variadic: boolean;
-  public validator: ParameterValidator|string[];
-  public value: string[];
+  protected name: string;
+  protected description: string;
+  protected mandatory: boolean;
+  protected variadic: boolean;
+  protected validator: ParameterValidator|string[];
+  protected value: string[];
 
   constructor({
     name,
@@ -63,7 +63,7 @@ class Parameter extends BaseComponent {
     return this.variadic;
   }
 
-  public async validate(otherArgumentValues: any, usageOverride?: string) {
+  public async validate(otherArgumentValues: any, usageOverride?: string, forceToDefine: boolean = false) {
     const errors: ValidationError[] = [];
     const usage = usageOverride || this.getUsage()
     
@@ -80,6 +80,16 @@ class Parameter extends BaseComponent {
         errors.push(validationResult);
       }
     }
+
+    if (forceToDefine && this.value.length === 0) {
+      let validationResult = await validator(undefined, otherArgumentValues);
+      if (validationResult === true) {
+        errors.push(new ParameterValidationError(usage, undefined));
+      } else if (validationResult instanceof ValidationError) {
+        errors.push(validationResult);
+      }
+    }
+    
     if (errors.length > 0) {
       if (this.isVariadic() && errors.length > 1) {
         return new VariadicParameterValidationError(usage, errors);
@@ -114,7 +124,7 @@ class Parameter extends BaseComponent {
     }
   }
 
-  public hasValue() {
+  public isSet() {
     if (this.isVariadic()) {
       return this.getValue().length > 0;
     }

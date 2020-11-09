@@ -81,7 +81,7 @@ interface HelpParts {
  * It must provide help parts and a validation method
  */
 abstract class BaseComponent {
-  public description?: string;
+  protected description?: string;
   public abstract getHelpParts(): HelpParts;
   public abstract validate(otherArgumentValues: any, usageOverride?: string): Promise<boolean|ValidationError>;
   public setDescription(description: string): BaseComponent {

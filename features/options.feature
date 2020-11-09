@@ -11,7 +11,7 @@ Feature: A command with options
     And the error output should be:
       """
       An error occured in command my-command:
-          Unknown option a in -a
+          Unknown option a in -a.
       """
 
   Scenario: A flag is not set
@@ -46,7 +46,7 @@ Feature: A command with options
     And the key "b" of the parse result should be set to true
     And the key "c" of the parse result should be set to false
 
-  Scenario: An option with a mandatory parameter is not provided
+  Scenario: An mandatory option with parameter is not provided
     Given a command line named "my-command"
     When I add a mandatory option "a" with a parameter "aaa"
     And I execute the command "my-command"
@@ -54,7 +54,7 @@ Feature: A command with options
     And the error output should be:
       """
       An error occured in command my-command:
-          The option -a <aaa> is mandatory for command my-command
+          The option -a <aaa> is mandatory.
       """
 
   Scenario: An option with a parameter is not provided
@@ -70,6 +70,52 @@ Feature: A command with options
     And I execute the command "my-command -a toto"
     Then it should succeed
     And the key "a" of the parse result should be set to "toto"
+
+  Scenario: An option with a parameter is provided without the parameter
+    Given a command line named "my-command"
+    When I add an option "a" with a parameter "aaa"
+    And I execute the command "my-command -a"
+    Then it should fail
+    And the error output should be:
+      """
+      An error occured in command my-command:
+          A value must be provided for -a <aaa>.
+      """
+
+  Scenario: An mandatory option with a parameter is provided without the parameter
+    Given a command line named "my-command"
+    When I add a mandatory option "a" with a parameter "aaa"
+    And I execute the command "my-command -a"
+    Then it should fail
+    And the error output should be:
+      """
+      An error occured in command my-command:
+          A value must be provided for -a <aaa>.
+      """
+
+  Scenario: An option with a validated parameter is provided without the parameter
+    Given a command line named "my-command"
+    When I add an option "a" with a parameter "aaa" that accepts values "foo,bar,baz"
+    And I execute the command "my-command -a"
+    Then it should fail
+    And the error output should be:
+      """
+      An error occured in command my-command:
+          A value must be provided for -a <aaa>.
+          Allowed values: foo, bar, baz.
+      """
+
+  Scenario: An option with a validated parameter is provided with a bad parameter
+    Given a command line named "my-command"
+    When I add an option "a" with a parameter "aaa" that accepts values "foo,bar,baz"
+    And I execute the command "my-command -a qux"
+    Then it should fail
+    And the error output should be:
+      """
+      An error occured in command my-command:
+          qux is not a correct value for -a <aaa>.
+          Allowed values: foo, bar, baz.
+      """
 
   Scenario: An option with a parameter provided multiple times takes the latest value
     Given a command line named "my-command"
