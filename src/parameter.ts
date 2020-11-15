@@ -1,7 +1,17 @@
 import { VariadicParameterValidationError, ParameterValidationError, ValidationError } from "./validation";
-import { BaseComponent } from "./utils";
+import { BaseComponent, HelpParts } from "./utils";
 
-type ParameterValidator = (value: string, otherArgumentValues?: any) => ValidationError|boolean|Promise<ValidationError|boolean>;
+/**
+ * A parameter validator can return:
+ *  - true if the parameter value is validated
+ *  - false if the parameter value is not validated
+ *  - an array of strings to check the parameter value with
+ *  - a ValidationError instance if one wants to customise the error
+ *  - a Promise of one of the above
+ */
+interface ParameterValidator {
+  (value: string, otherArgumentValues: Record<string, unknown>): ValidationError|boolean|string[]|Promise<ValidationError|boolean|string[]>;
+}
 
 const generateSimpleValidator = (usage: string, allowedValues: string[]) => {
   const validator: ParameterValidator = (value: string) => {
@@ -20,7 +30,7 @@ interface ParameterArg {
   description?: string;
   mandatory?: boolean;
   variadic?: boolean;
-  validator?: ParameterValidator|string[];
+  validator?: string[]|ParameterValidator;
 }
 
 class Parameter extends BaseComponent {
@@ -28,7 +38,7 @@ class Parameter extends BaseComponent {
   protected description: string;
   protected mandatory: boolean;
   protected variadic: boolean;
-  protected validator: ParameterValidator|string[];
+  protected validator: string[]|ParameterValidator;
   protected value: string[];
 
   constructor({
@@ -47,33 +57,41 @@ class Parameter extends BaseComponent {
     this.value = [];
   }
 
-  public getName() {
+  public getName(): string {
     return this.name;
   }
 
-  public isMandatory() {
+  public isMandatory(): boolean {
     return this.mandatory;
   }
 
-  public setAsMandatory(value: boolean) {
+  public setAsMandatory(value: boolean): void {
     this.mandatory = value;
   }
 
-  public isVariadic() {
+  public isVariadic(): boolean {
     return this.variadic;
   }
 
-  public async validate(otherArgumentValues: any, usageOverride?: string, forceToDefine: boolean = false) {
+  public async validate(otherArgumentValues: Record<string,unknown>, usageOverride?: string, forceToDefine = false): Promise<boolean|ValidationError> {
     const errors: ValidationError[] = [];
     const usage = usageOverride || this.getUsage()
-    
+
     // If the instance's validator is an array, we generate a simple validator from it
-    const validator = this.validator instanceof Array
-                    ? generateSimpleValidator(usage, this.validator)
-                    : this.validator;
+    let validator: ParameterValidator
+    if (this.validator instanceof Array) {
+      validator = generateSimpleValidator(usage, this.validator);
+    } else {
+      const validatorResult = await this.validator(undefined, otherArgumentValues);
+      if (validatorResult instanceof Array) {
+        validator = generateSimpleValidator(usage, validatorResult);
+      } else {
+        validator = this.validator;
+      }
+    }
 
     for (const value of this.value) {
-      let validationResult = await validator(value, otherArgumentValues);
+      const validationResult = await validator(value, otherArgumentValues);
       if (validationResult === false) {
         errors.push(new ParameterValidationError(usage, value));
       } else if (validationResult instanceof ValidationError) {
@@ -82,7 +100,7 @@ class Parameter extends BaseComponent {
     }
 
     if (forceToDefine && this.value.length === 0) {
-      let validationResult = await validator(undefined, otherArgumentValues);
+      const validationResult = await validator(undefined, otherArgumentValues);
       if (validationResult === true) {
         errors.push(new ParameterValidationError(usage, undefined));
       } else if (validationResult instanceof ValidationError) {
@@ -99,7 +117,7 @@ class Parameter extends BaseComponent {
     return true;
   }
 
-  public getUsage() {
+  public getUsage(): string {
     const name = this.getName() + (this.isVariadic() ? `...` : ``);
     if (this.isMandatory()) {
       return `<${name}>`;
@@ -107,16 +125,15 @@ class Parameter extends BaseComponent {
     return `[${name}]`;
   }
 
-  public getHelpParts() {
+  public getHelpParts(): HelpParts {
     return { usage: this.getUsage(), description: this.description };
   }
 
-  public setValue(value: string) {
+  public setValue(value: string): void {
     this.value.push(value);
-    return this;
   }
 
-  public getValue() {
+  public getValue(): string|string[] {
     if (this.isVariadic()) {
       return this.value;
     } else {
@@ -124,14 +141,14 @@ class Parameter extends BaseComponent {
     }
   }
 
-  public isSet() {
+  public isSet(): boolean {
     if (this.isVariadic()) {
       return this.getValue().length > 0;
     }
     return this.getValue() !== undefined;
   }
 
-  public toString() {
+  public toString(): string {
     return `Parameter ${this.getUsage()}`;
   }
 }

@@ -1,11 +1,8 @@
 #!/usr/bin/env ts-node
 /* tslint:disable:no-console */
 import { Command } from "../src/command";
-import Parameter from "../src/parameter";
 import { format } from "../src/utils";
-import getArgv from "../src/process-argv-wrapper";
-import Option from "../src/option";
-import { ValidationError, ParameterValidationError } from "../src/validation";
+import { ParameterValidationError } from "../src/validation";
 
 const myrmex = new Command({
   name: `myrmex`,
@@ -61,7 +58,7 @@ const myrmex = new Command({
           validator: ["@myrmex/lambda", "@myrmex/api-gateway"],
         },
       ],
-      action: (result) => {
+      action: (result: Record<string,string>) => {
         console.log(`Creating new project ${format.cmd(result["project-name"])}`);
         console.log(result);
         console.log("done");
@@ -88,8 +85,8 @@ const lambda = new Command({
           },
         },
       ],
-      action: (result) => {
-        console.log(`Deploying ${format.cmd(result.function.join(", "))}`);
+      action: (result: Record<string,string|string[]>) => {
+        console.log(`Deploying ${format.cmd((result.function as string[]).join(", "))}`);
         console.log(JSON.stringify(result, null, 2));
         console.log("done");
       },

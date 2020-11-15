@@ -13,7 +13,7 @@
     "test:watch": "npm run test -- --watchAll",
     "ts:run": "ts-node",
     "ts:watch": "tsc -w",
-    "lint": "tslint -c tslint.json -p tsconfig.json"
+    "lint": "eslint . --ext .js,.ts"
   },
   "author": "Alexis Henaut",
   "license": "MIT",
@@ -21,14 +21,16 @@
     "@types/cucumber": "^6.0.0",
     "@types/jest": "^24.0.12",
     "@types/node": "^11.13.0",
+    "@typescript-eslint/eslint-plugin": "^4.7.0",
+    "@typescript-eslint/parser": "^4.7.0",
     "cucumber": "^6.0.5",
     "cucumber-pretty": "^6.0.0",
+    "eslint": "^7.13.0",
     "jest": "^24.7.1",
     "source-map-support": "^0.5.11",
     "ts-jest": "^24.0.2",
     "ts-node": "^8.6.2",
-    "tslint": "^5.15.0",
-    "typescript": "^3.4.2"
+    "typescript": "^3.9.7"
   },
   "dependencies": {}
 }

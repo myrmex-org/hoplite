@@ -15,7 +15,7 @@ class ValidationError {
     this.indent = '    ';
   }
 
-  public getOutput(indent = '') {
+  public getOutput(indent = ''): string {
     let output = this.message;
     this.childErrors.forEach(error => {
       output += EOL + error.getOutput(indent + this.indent);
@@ -53,7 +53,7 @@ class MandatoryParameterError extends ValidationError {
 
 class CommandError extends ValidationError {
   constructor(command: string, errors: ValidationError[]) {
-    let message = `${errors.length === 1 ? `An error` : `Some errors`} occured in command ${format.cmd(command)}:`;
+    const message = `${errors.length === 1 ? `An error` : `Some errors`} occured in command ${format.cmd(command)}:`;
     super(message, errors);
   }
 }

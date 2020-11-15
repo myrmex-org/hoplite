@@ -2,9 +2,9 @@ import { EOL } from "os";
 import { ValidationError, CommandError, UnknownOptionError, UnexpectedParameterError, MandatoryOptionError, MandatoryParameterError } from "./validation";
 import { Option, OptionArg } from "./option";
 import { Parameter, ParameterArg } from "./parameter";
-import { format, getIndentation, BaseComponent, hProcess } from "./utils";
+import { format, getIndentation, BaseComponent, HelpParts, hProcess } from "./utils";
 
-type Action = (parseResult: any) => any;
+type Action = (parseResult: Record<string, unknown>) => unknown;
 
 interface CommandArg {
   options?: Array<Option|OptionArg>;
@@ -44,10 +44,9 @@ class Command extends BaseComponent {
   protected parentCommand: Command;
   protected helpOption: Option;
   public action: Action;
-  protected parseResult: any = {};
   protected errors: ValidationError[];
-  protected stdOut: string = "";
-  protected stdErr: string = "";
+  protected stdOut = "";
+  protected stdErr = "";
 
   constructor({
     name,
@@ -79,34 +78,40 @@ class Command extends BaseComponent {
    * Methods to build the command
    ***************************************************************/
 
-  public addOption(option: Option|OptionArg) {
+  public addOption(option: Option|OptionArg): Command {
     this.options.push(option instanceof Option ? option : new Option(option));
+    return this;
   }
 
-  public addParameter(parameter: Parameter|ParameterArg) {
+  public addParameter(parameter: Parameter|ParameterArg): Command {
     this.parameters.push(parameter instanceof Parameter ? parameter : new Parameter(parameter));
+    return this;
   }
 
-  public addSubCommand(subCommand: Command|CommandArg) {
+  public addSubCommand(subCommand: Command|CommandArg): Command {
     const sc = subCommand instanceof Command ? subCommand : new Command(subCommand);
     this.subCommands.set(sc.name, sc);
     sc.setParentCommand(this);
+    return this;
   }
 
-  public setParentCommand(parentCommand: Command) {
+  public setParentCommand(parentCommand: Command): Command {
     this.parentCommand = parentCommand;
+    return this;
   }
 
-  public setAction(action: Action) {
+  public setAction(action: Action): Command {
     this.action = action;
+    return this;
   }
 
-  public getCurrentParameter() {
+  public getCurrentParameter(): Parameter {
     for (const parameter of this.parameters) {
       if (!parameter.isSet() || parameter.isVariadic()) {
         return parameter
       }
     }
+    return null;
   }
 
 
@@ -120,6 +125,9 @@ class Command extends BaseComponent {
       this.scriptPath = argv.shift();
     }
 
+    // We allow aliasing "this" here because "currentArgument" contains the
+    // current element being parsed and it statrs with the command itself
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     let currentArgument: BaseComponent = this;
 
     // Iterate through command arguments
@@ -138,7 +146,7 @@ class Command extends BaseComponent {
     return currentArgument;
   }
 
-  public async parse(argv: string[]): Promise<any> {
+  public async parse(argv: string[]): Promise<unknown> {
     this.setValuesAndGetCurrentArgument(argv);
 
     // Check if the help option has been provided
@@ -156,8 +164,8 @@ class Command extends BaseComponent {
     return this.execAction();
   }
 
-  public getValues() {
-    const values: any = {};
+  public getValues(): Record<string, unknown> {
+    const values: Record<string, unknown> = {};
     if (this.parentCommand) {
       values._ = this.parentCommand.getValues();
     }
@@ -170,7 +178,7 @@ class Command extends BaseComponent {
     return values;
   }
 
-  public execAction(): any {
+  public execAction(): unknown {
     if (this.subCommand) {
       return this.subCommand.execAction();
     }
@@ -201,7 +209,7 @@ class Command extends BaseComponent {
     });
   }
 
-  public async validate() {
+  public async validate(): Promise<true|ValidationError> {
     // Check if mandatory options are provided
     await this.checkMandatoryOptions();
 
@@ -246,7 +254,7 @@ class Command extends BaseComponent {
    * Methods to set values the command parts
    ***************************************************************/
 
-  public processNextArgument(argv: string[]) {
+  public processNextArgument(argv: string[]): BaseComponent {
     const arg = argv.shift();
     let currentArgument;
     if (/^-[a-zA-Z]+$/.test(arg)) {
@@ -260,12 +268,12 @@ class Command extends BaseComponent {
       currentArgument = this.processSubCommand(arg, argv);
     } else {
       // A parameter
-      currentArgument = this.processParameters(arg, argv);
+      currentArgument = this.processParameters(arg);
     }
     return currentArgument;
   }
 
-  public processShortOptions(arg: string, argv: string[]) {
+  public processShortOptions(arg: string, argv: string[]): Option|Command {
     let option;
     for (let i = 1; i < arg.length; i++) {
       option = this.processOption(arg.charAt(i), arg, argv);
@@ -273,7 +281,7 @@ class Command extends BaseComponent {
     return option;
   }
 
-  public processOption(name: string, arg: string, argv: string[]) {
+  public processOption(name: string, arg: string, argv: string[]): Option|Command {
     const option = this.options.find((o) => {
       return o.getShort() === name || o.getLong() === name;
     });
@@ -285,12 +293,12 @@ class Command extends BaseComponent {
     return option;
   }
 
-  public processSubCommand(arg: string, argv: string[]) {
+  public processSubCommand(arg: string, argv: string[]): BaseComponent {
     this.subCommand = this.subCommands.get(arg);
     return this.subCommand.setValuesAndGetCurrentArgument(argv);
   }
 
-  public processParameters(arg: string, argv: string[]) {
+  public processParameters(arg: string): Parameter|Command {
     const currentParameter = this.getCurrentParameter();
     if (!currentParameter) {
       this.errors.push(new UnexpectedParameterError(arg));
@@ -305,7 +313,7 @@ class Command extends BaseComponent {
    * Methods to print information for the end user
    ***************************************************************/
 
-  public getName() {
+  public getName(): string {
     return this.name
   }
 
@@ -313,7 +321,7 @@ class Command extends BaseComponent {
     return `${this.parentCommand ? this.parentCommand.getInvocation() + ` ` : ``}${this.name}`;
   }
 
-  public getUsage() {
+  public getUsage(): string {
     let usage = this.getInvocation();
     if (this.options.length) {
       usage += ` [OPTIONS]`;
@@ -327,11 +335,11 @@ class Command extends BaseComponent {
     return usage;
   }
 
-  public getHelpParts() {
+  public getHelpParts(): HelpParts {
     return { usage: this.name, description: this.description };
   }
 
-  public getHelp() {
+  public getHelp(): string {
     const indent = getIndentation();
     let help = ``;
     if (this.description) {
@@ -370,7 +378,7 @@ class Command extends BaseComponent {
 
   public async printErrorIfNeeded(): Promise<boolean> {
     const validationResult = await this.validate();
-    if (validationResult !== true) {
+    if (validationResult instanceof ValidationError) {
       hProcess.writeStdErr(validationResult.getOutput());
       return true
     }

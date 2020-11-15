@@ -13,7 +13,7 @@ interface TestContext {
   rootCommand?: Command;
   command?: Command;
   currentArgument?: BaseComponent,
-  commandResult?: any;
+  commandResult?: Record<string,unknown>;
   mockRestore?: () => void,
   stdOut?: string,
   stdErr?: string,
@@ -78,7 +78,7 @@ When('I execute the command {string}', async function (this: TestContext, comman
   argv.shift()
   expect(this.rootCommand.getName()).toStrictEqual(argv[1]);
   try {
-    this.commandResult = await this.rootCommand.parse(argv);
+    this.commandResult = await this.rootCommand.parse(argv) as Record<string, unknown>;
   } catch (err) {
     // We silence ProcessExit errors because they are mocks for process.exit() call
     // but we propagate other errors

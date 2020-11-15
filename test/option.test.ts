@@ -1,6 +1,6 @@
 import { Option } from "../src/option";
 import { ParameterValidationError } from "../src/validation";
-import { format } from "../src/utils";
+import { format, HelpParts } from "../src/utils";
 
 describe("The Option class", () => {
 
@@ -40,7 +40,7 @@ describe("The Option class", () => {
     parameter: {
       name: "h-param",
       description: "the parameter from option h",
-      validator: (value) => {
+      validator: (value: string) => {
         return Promise.resolve(/^[0-9]+$/.test(value));
       }
     },
@@ -67,7 +67,7 @@ describe("The Option class", () => {
       [ longOption, "--bbbbb" ],
       [ shortLongOption, "-c, --ccccc" ],
       [ shortLongDescriptionOption, "-d, --ddddd" ],
-      [ shortLongDescriptionParameterOption, "-e, --eeeee [e-param]" ]
+      [ shortLongDescriptionParameterOption, "-e, --eeeee <e-param>" ]
     ])("should get %s usage", (option: Option, expected: string) => {
       expect(option.getUsage()).toEqual(expected);
     });
@@ -79,8 +79,8 @@ describe("The Option class", () => {
       [ longOption, { usage: "--bbbbb", description: undefined } ],
       [ shortLongOption, { usage: "-c, --ccccc", description: undefined } ],
       [ shortLongDescriptionOption, { usage: "-d, --ddddd", description: "dd ddd dddd" } ],
-      [ shortLongDescriptionParameterOption, { usage: "-e, --eeeee [e-param]", description: "ee eee eeee" } ]
-    ])("should get %s help parts", (option: Option, expected: object) => {
+      [ shortLongDescriptionParameterOption, { usage: "-e, --eeeee <e-param>", description: "ee eee eeee" } ]
+    ])("should get %s help parts", (option: Option, expected: any) => {
       const parts = option.getHelpParts();
       expect(parts).toEqual(expected);
     });
@@ -125,14 +125,13 @@ describe("The Option class", () => {
   describe("validate() method", () => {
     it("should validate if the parameter is correct", async () => {
       shortIntegerParameterOption.setValue(["123", "argv2"]);
-      await expect(shortIntegerParameterOption.validate()).resolves.toEqual({ success: true });
+      await expect(shortIntegerParameterOption.validate()).resolves.toEqual(true);
     });
     it("should not validate if the parameter is not correct", async () => {
       shortIntegerParameterOption.setValue(["argv1", "argv2"]);
       const validationResult = await shortIntegerParameterOption.validate();
-      expect(validationResult.success).toEqual(false);
-      expect(validationResult.error).toBeInstanceOf(ParameterValidationError);
-      expect(validationResult.error.getOutput()).toContain(`${format.error("argv1")} is not a correct value for ${format.cmd("-h [h-param]")}.`);
+      expect(validationResult).toBeInstanceOf(ParameterValidationError);
+      expect((validationResult as ParameterValidationError).getOutput()).toContain(`${format.error("argv1")} is not a correct value for ${format.cmd("-h <h-param>")}.`);
     });
   });
 

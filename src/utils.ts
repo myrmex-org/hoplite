@@ -1,13 +1,13 @@
 import { ValidationError } from "./validation";
 
-let indentation: string = `  `;
-let colorEnabled: boolean = true;
+let indentation = `  `;
+let colorEnabled = true;
 
 /**
  * Set the patern used for indentation
  * It should be a number of spaces or of tabs
  */
-function setIndentation(newIndentation: string) {
+function setIndentation(newIndentation: string): void {
   indentation = newIndentation;
 }
 
@@ -15,7 +15,7 @@ function setIndentation(newIndentation: string) {
 /**
  * Get the patern used for indentation
  */
-function getIndentation() {
+function getIndentation(): string {
   return indentation;
 }
 
@@ -23,7 +23,7 @@ function getIndentation() {
 /**
  * Enable / disable colors in the console
  */
-function enableColors(enabled: boolean = true) {
+function enableColors(enabled = true): void {
   colorEnabled = enabled;
 }
 
@@ -32,16 +32,16 @@ function enableColors(enabled: boolean = true) {
  * Object providing helpers to apply color codes to strings displayed in the console
  */
 const format = {
-  cmd:     (msg: string) => format.custom(msg, "\x1b[33m"), // Yellow
-  info:    (msg: string) => format.custom(msg, "\x1b[36m"), // Cyan
-  error:   (msg: string) => format.custom(msg, "\x1b[31m"), // Red
-  success: (msg: string) => format.custom(msg, "\x1b[32m"), // Green
-  custom:  (msg: string, code: string) => {
+  cmd:     (msg: string): string => format.custom(msg, "\x1b[33m"), // Yellow
+  info:    (msg: string): string => format.custom(msg, "\x1b[36m"), // Cyan
+  error:   (msg: string): string => format.custom(msg, "\x1b[31m"), // Red
+  success: (msg: string): string => format.custom(msg, "\x1b[32m"), // Green
+  custom:  (msg: string, code: string): string => {
     return colorEnabled ? code + msg + "\x1b[0m" : msg;
   },
   // aliases
-  ko: (msg: string) => format.error(msg),
-  ok: (msg: string) => format.success(msg),
+  ko: (msg: string): string => format.error(msg),
+  ok: (msg: string): string => format.success(msg),
 };
 
 
@@ -51,15 +51,15 @@ const format = {
  */
 const hProcess = {
 
-  writeStdOut(s: string) {
+  writeStdOut(s: string): boolean {
     return process.stdout.write(s);
   },
 
-  writeStdErr(s: string) {
+  writeStdErr(s: string): boolean {
     return process.stderr.write(s);
   },
 
-  exit(code: number) {
+  exit(code: number): never {
     return process.exit(code);
   },
 
@@ -83,7 +83,7 @@ interface HelpParts {
 abstract class BaseComponent {
   protected description?: string;
   public abstract getHelpParts(): HelpParts;
-  public abstract validate(otherArgumentValues: any, usageOverride?: string): Promise<boolean|ValidationError>;
+  public abstract validate(otherArgumentValues: Record<string, unknown>, usageOverride?: string): Promise<boolean|ValidationError>;
   public setDescription(description: string): BaseComponent {
     this.description = description;
     return this;
@@ -101,4 +101,5 @@ export {
   format,
   hProcess,
   BaseComponent,
+  HelpParts,
 };

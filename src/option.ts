@@ -1,5 +1,6 @@
 import { Parameter, ParameterArg } from "./parameter";
-import { BaseComponent } from "./utils";
+import { BaseComponent, HelpParts } from "./utils";
+import { ValidationError } from "./validation";
 
 interface OptionArg {
   short?: string;
@@ -41,7 +42,7 @@ class Option extends BaseComponent {
     this.setWithoutParameter = false;
   }
 
-  public setValue(argv: string[]) {
+  public setValue(argv: string[]): void {
     if (this.parameter) {
       if (argv.length === 0) {
         this.setWithoutParameter = true;
@@ -53,52 +54,52 @@ class Option extends BaseComponent {
     }
   }
 
-  public getValue() {
+  public getValue(): boolean|string|string[] {
     if (this.parameter) {
       return this.parameter.getValue();
     }
     return this.value;
   }
 
-  public isSet() {
+  public isSet(): boolean {
     if (this.parameter) {
       return this.setWithoutParameter || this.parameter.isSet();
     }
     return this.value !== undefined;
   }
 
-  public hasParameter() {
+  public hasParameter(): boolean {
     return this.parameter instanceof Parameter;
   }
 
-  public getShort() {
+  public getShort(): string {
     return this.short;
   }
 
-  public getLong() {
+  public getLong(): string {
     return this.long;
   }
 
-  public getName() {
+  public getName(): string {
     return this.long || this.short;
   }
 
-  public isMandatory() {
+  public isMandatory(): boolean {
     return this.mandatory;
   }
 
-  public doesAcceptMultipleValues() {
+  public doesAcceptMultipleValues(): boolean {
     return !!(this.parameter && this.parameter.isVariadic());
   }
 
-  public async validate(otherArgumentValues?: any) {
+  public async validate(otherArgumentValues?: Record<string, unknown>): Promise<boolean|ValidationError> {
     if (this.parameter) {
       return this.parameter.validate(otherArgumentValues, this.getUsage(), this.setWithoutParameter);
     }
     return true;
   }
 
-  public getUsage() {
+  public getUsage(): string {
     let usage = "";
     if (this.short) {
       usage += `-${this.short}`;
@@ -115,11 +116,11 @@ class Option extends BaseComponent {
     return usage;
   }
 
-  public getHelpParts() {
+  public getHelpParts(): HelpParts {
     return { usage: this.getUsage(), description: this.description };
   }
 
-  public toString() {
+  public toString(): string {
     return `Option ${this.getUsage()}`;
   }
 }
