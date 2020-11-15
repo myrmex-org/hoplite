@@ -1,10 +1,16 @@
-import { EOL } from "os";
-import { ValidationError, CommandError, UnknownOptionError, UnexpectedParameterError, MandatoryOptionError, MandatoryParameterError } from "./validation";
-import { Option, OptionArg } from "./option";
-import { Parameter, ParameterArg } from "./parameter";
-import { format, getIndentation, BaseComponent, hProcess } from "./utils";
+import { EOL } from 'os';
+import {
+  ValidationError,
+  CommandError,
+  UnknownOptionError,
+  UnexpectedParameterError,
+} from './validation';
+import { Option, OptionArg } from './option';
+import { Parameter, ParameterArg } from './parameter';
+import { format, getIndentation, hProcess } from './utils';
+import { BaseComponent, HelpParts } from './base-component';
 
-type Action = (parseResult: any) => any;
+type Action = (parseResult: Record<string, unknown>) => unknown;
 
 interface CommandArg {
   options?: Array<Option|OptionArg>;
@@ -18,7 +24,7 @@ interface CommandArg {
 }
 
 function getHelpComponentsFormatation(helpComponents: BaseComponent[], indent: string) {
-  let output = ``;
+  let output = '';
   const helpParts = helpComponents.map((hc) => hc.getHelpParts());
   const usagePartSize = Math.max(...helpParts.map((parts) => parts.usage.length)) + 3;
   helpParts.forEach((hp) => {
@@ -33,21 +39,34 @@ function getHelpComponentsFormatation(helpComponents: BaseComponent[], indent: s
 
 class Command extends BaseComponent {
   protected execPath: string;
+
   protected scriptPath: string;
+
   protected name: string;
+
   protected description: string;
+
   protected longDescription: string;
+
   protected options: Option[] = [];
+
   protected parameters: Parameter[] = [];
+
   protected subCommands: Map<string, Command> = new Map();
+
   protected subCommand: Command;
+
   protected parentCommand: Command;
+
   protected helpOption: Option;
+
   public action: Action;
-  protected parseResult: any = {};
+
   protected errors: ValidationError[];
-  protected stdOut: string = "";
-  protected stdErr: string = "";
+
+  protected stdOut = '';
+
+  protected stdErr = '';
 
   constructor({
     name,
@@ -56,7 +75,7 @@ class Command extends BaseComponent {
     options = [],
     parameters = [],
     subCommands = [],
-    helpOption = { long: "help", description: "show command usage" },
+    helpOption = { long: 'help', description: 'show command usage' },
     action,
   }: CommandArg) {
     super();
@@ -67,52 +86,51 @@ class Command extends BaseComponent {
     this.description = description;
     this.longDescription = longDescription;
     if (helpOption) {
-      this.helpOption = helpOption instanceof Option ? helpOption : new Option(helpOption),
+      this.helpOption = helpOption instanceof Option ? helpOption : new Option(helpOption);
       this.addOption(this.helpOption);
     }
     this.setAction(action);
     this.errors = [];
   }
 
-
-  /***************************************************************
+  /** *************************************************************
    * Methods to build the command
-   ***************************************************************/
+   ************************************************************** */
 
-  public addOption(option: Option|OptionArg) {
+  public addOption(option: Option|OptionArg): Command {
     this.options.push(option instanceof Option ? option : new Option(option));
+    return this;
   }
 
-  public addParameter(parameter: Parameter|ParameterArg) {
+  public addParameter(parameter: Parameter|ParameterArg): Command {
     this.parameters.push(parameter instanceof Parameter ? parameter : new Parameter(parameter));
+    return this;
   }
 
-  public addSubCommand(subCommand: Command|CommandArg) {
+  public addSubCommand(subCommand: Command|CommandArg): Command {
     const sc = subCommand instanceof Command ? subCommand : new Command(subCommand);
     this.subCommands.set(sc.name, sc);
     sc.setParentCommand(this);
+    return this;
   }
 
-  public setParentCommand(parentCommand: Command) {
+  public setParentCommand(parentCommand: Command): Command {
     this.parentCommand = parentCommand;
+    return this;
   }
 
-  public setAction(action: Action) {
+  public setAction(action: Action): Command {
     this.action = action;
+    return this;
   }
 
-  public getCurrentParameter() {
-    for (const parameter of this.parameters) {
-      if (!parameter.isSet() || parameter.isVariadic()) {
-        return parameter
-      }
-    }
+  public getCurrentParameter(): Parameter {
+    return this.parameters.find((parameter) => !parameter.isSet() || parameter.isVariadic());
   }
 
-
-  /***************************************************************
+  /** *************************************************************
    * Methods to parse the command input
-   ***************************************************************/
+   ************************************************************** */
 
   public setValuesAndGetCurrentArgument(argv: string[]): BaseComponent {
     if (!this.parentCommand) {
@@ -120,6 +138,9 @@ class Command extends BaseComponent {
       this.scriptPath = argv.shift();
     }
 
+    // We allow aliasing "this" here because "currentArgument" contains the
+    // current element being parsed and it statrs with the command itself
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     let currentArgument: BaseComponent = this;
 
     // Iterate through command arguments
@@ -128,7 +149,7 @@ class Command extends BaseComponent {
     }
 
     if (currentArgument instanceof Option && !currentArgument.hasParameter()) {
-      return this
+      return this;
     }
     return currentArgument;
   }
@@ -138,11 +159,11 @@ class Command extends BaseComponent {
     return currentArgument;
   }
 
-  public async parse(argv: string[]): Promise<any> {
+  public async parse(argv: string[]): Promise<unknown> {
     this.setValuesAndGetCurrentArgument(argv);
 
     // Check if the help option has been provided
-    const helpPrinted = await this.printHelpIfNeeded()
+    const helpPrinted = await this.printHelpIfNeeded();
     if (helpPrinted) {
       hProcess.exit(0);
     }
@@ -156,21 +177,21 @@ class Command extends BaseComponent {
     return this.execAction();
   }
 
-  public getValues() {
-    const values: any = {};
+  public getValues(): Record<string, unknown> {
+    const values: Record<string, unknown> = {};
     if (this.parentCommand) {
       values._ = this.parentCommand.getValues();
     }
-    this.options.forEach(option => {
+    this.options.forEach((option) => {
       values[option.getName()] = option.getValue();
     });
-    this.parameters.forEach(parameter => {
+    this.parameters.forEach((parameter) => {
       values[parameter.getName()] = parameter.getValue();
     });
     return values;
   }
 
-  public execAction(): any {
+  public execAction(): unknown {
     if (this.subCommand) {
       return this.subCommand.execAction();
     }
@@ -180,60 +201,38 @@ class Command extends BaseComponent {
     return this.getValues();
   }
 
-
-  /***************************************************************
+  /** *************************************************************
    * Methods to validate the command
-   ***************************************************************/
+   ************************************************************** */
 
-  private async checkMandatoryOptions() {
-    this.options.forEach((option) => {
-      if (option.isMandatory() && !option.isSet()) {
-        this.errors.push(new MandatoryOptionError(option.getUsage()));
-      }
-    });
-  }
-
-  private async checkMandatoryParameters() {
-    this.parameters.forEach((parameter) => {
-      if (parameter.isMandatory() && !parameter.isSet()) {
-        this.errors.push(new MandatoryParameterError(parameter.getUsage()));
-      }
-    });
-  }
-
-  public async validate() {
-    // Check if mandatory options are provided
-    await this.checkMandatoryOptions();
-
-    // Check if mandatory parameters are provided
-    await this.checkMandatoryParameters();
-
+  public async validate(): Promise<true|ValidationError> {
     // Retrieve values provided for all arguments to use for validation
-    const values = this.getValues()
+    const values = this.getValues();
+
+    const validationPromises: Promise<true|ValidationError>[] = [];
 
     // Retrieve option errors
-    for (const option of this.options) {
-      const validationResult = await option.validate(values);
-      if (validationResult instanceof ValidationError) {
-        this.errors.push(validationResult);
-      }
-    }
+    this.options.forEach((option) => {
+      validationPromises.push(option.validate(values));
+    });
 
     // Retrieve parameter errors
-    for (const parameter of this.parameters) {
-      const validationResult = await parameter.validate(values);
-      if (validationResult instanceof ValidationError) {
-        this.errors.push(validationResult);
-      }
-    }
+    this.parameters.forEach((parameter) => {
+      validationPromises.push(parameter.validate(values));
+    });
 
     // Retrieve sub-command errors
     if (this.subCommand) {
-      const validationResult = await this.subCommand.validate();
-      if (validationResult instanceof ValidationError) {
-        this.errors.push(validationResult);
-      }
+      validationPromises.push(this.subCommand.validate());
     }
+
+    const validationResults = await Promise.all(validationPromises);
+    this.errors = validationResults.reduce((acc, validationResult) => {
+      if (validationResult !== true) {
+        acc.push(validationResult);
+      }
+      return acc;
+    }, this.errors);
 
     if (this.errors.length === 0) {
       return true;
@@ -241,12 +240,11 @@ class Command extends BaseComponent {
     return new CommandError(this.getName(), this.errors);
   }
 
-
-  /***************************************************************
+  /** *************************************************************
    * Methods to set values the command parts
-   ***************************************************************/
+   ************************************************************** */
 
-  public processNextArgument(argv: string[]) {
+  public processNextArgument(argv: string[]): BaseComponent {
     const arg = argv.shift();
     let currentArgument;
     if (/^-[a-zA-Z]+$/.test(arg)) {
@@ -260,23 +258,21 @@ class Command extends BaseComponent {
       currentArgument = this.processSubCommand(arg, argv);
     } else {
       // A parameter
-      currentArgument = this.processParameters(arg, argv);
+      currentArgument = this.processParameters(arg);
     }
     return currentArgument;
   }
 
-  public processShortOptions(arg: string, argv: string[]) {
+  public processShortOptions(arg: string, argv: string[]): Option|Command {
     let option;
-    for (let i = 1; i < arg.length; i++) {
+    for (let i = 1; i < arg.length; i += 1) {
       option = this.processOption(arg.charAt(i), arg, argv);
     }
     return option;
   }
 
-  public processOption(name: string, arg: string, argv: string[]) {
-    const option = this.options.find((o) => {
-      return o.getShort() === name || o.getLong() === name;
-    });
+  public processOption(name: string, arg: string, argv: string[]): Option|Command {
+    const option = this.options.find((o) => o.getShort() === name || o.getLong() === name);
     if (!option) {
       this.errors.push(new UnknownOptionError(name, arg));
       return this;
@@ -285,12 +281,12 @@ class Command extends BaseComponent {
     return option;
   }
 
-  public processSubCommand(arg: string, argv: string[]) {
+  public processSubCommand(arg: string, argv: string[]): BaseComponent {
     this.subCommand = this.subCommands.get(arg);
     return this.subCommand.setValuesAndGetCurrentArgument(argv);
   }
 
-  public processParameters(arg: string, argv: string[]) {
+  public processParameters(arg: string): Parameter|Command {
     const currentParameter = this.getCurrentParameter();
     if (!currentParameter) {
       this.errors.push(new UnexpectedParameterError(arg));
@@ -300,44 +296,43 @@ class Command extends BaseComponent {
     return currentParameter;
   }
 
-
-  /***************************************************************
+  /** *************************************************************
    * Methods to print information for the end user
-   ***************************************************************/
+   ************************************************************** */
 
-  public getName() {
-    return this.name
+  public getName(): string {
+    return this.name;
   }
 
   public getInvocation(): string {
-    return `${this.parentCommand ? this.parentCommand.getInvocation() + ` ` : ``}${this.name}`;
+    return `${this.parentCommand ? `${this.parentCommand.getInvocation()} ` : ''}${this.name}`;
   }
 
-  public getUsage() {
+  public getUsage(): string {
     let usage = this.getInvocation();
     if (this.options.length) {
-      usage += ` [OPTIONS]`;
+      usage += ' [OPTIONS]';
     }
     if (this.parameters.length) {
       this.parameters.forEach((parameter) => { usage += ` ${parameter.getUsage()}`; });
     }
     if (this.subCommands.size) {
-      usage += ` <COMMAND>`;
+      usage += ' <COMMAND>';
     }
     return usage;
   }
 
-  public getHelpParts() {
+  public getHelpParts(): HelpParts {
     return { usage: this.name, description: this.description };
   }
 
-  public getHelp() {
+  public getHelp(): string {
     const indent = getIndentation();
-    let help = ``;
+    let help = '';
     if (this.description) {
       help += `${EOL}${this.description}${EOL}`;
     }
-    help += `${EOL}Usage: ${format.cmd(this.getUsage())}${EOL}`
+    help += `${EOL}Usage: ${format.cmd(this.getUsage())}${EOL}`;
     if (this.longDescription) {
       help += `${EOL}${this.longDescription}${EOL}`;
     }
@@ -363,16 +358,16 @@ class Command extends BaseComponent {
       return true;
     }
     if (this.subCommand) {
-      return await this.subCommand.printHelpIfNeeded()
+      return this.subCommand.printHelpIfNeeded();
     }
     return false;
   }
 
   public async printErrorIfNeeded(): Promise<boolean> {
     const validationResult = await this.validate();
-    if (validationResult !== true) {
+    if (validationResult instanceof ValidationError) {
       hProcess.writeStdErr(validationResult.getOutput());
-      return true
+      return true;
     }
     return false;
   }

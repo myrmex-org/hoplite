@@ -1,5 +1,6 @@
-import { Parameter, ParameterArg } from "./parameter";
-import { BaseComponent } from "./utils";
+import { Parameter, ParameterArg } from './parameter';
+import { BaseComponent, HelpParts } from './base-component';
+import { MandatoryOptionError, ValidationError } from './validation';
 
 interface OptionArg {
   short?: string;
@@ -11,12 +12,16 @@ interface OptionArg {
 
 class Option extends BaseComponent {
   protected short?: string;
+
   protected long?: string;
+
   protected description?: string;
+
   protected mandatory?: boolean;
+
   protected parameter?: Parameter;
+
   protected value: boolean;
-  protected setWithoutParameter: boolean;
 
   constructor({
     short,
@@ -26,7 +31,7 @@ class Option extends BaseComponent {
     parameter,
   }: OptionArg) {
     if (!short && !long) {
-      throw new Error("An option should have a least one short name or one long name.")
+      throw new Error('An option should have a least one short name or one long name.');
     }
     super();
     this.short = short;
@@ -37,77 +42,76 @@ class Option extends BaseComponent {
       this.parameter = parameter instanceof Parameter ? parameter : new Parameter(parameter);
       this.parameter.setAsMandatory(true);
     }
-    this.value = false;
-    this.setWithoutParameter = false;
+    this.value = undefined;
   }
 
-  public setValue(argv: string[]) {
-    if (this.parameter) {
-      if (argv.length === 0) {
-        this.setWithoutParameter = true;
-      } else {
-        this.parameter.setValue(argv.shift());
-      }
-    } else {
-      this.value = true;
+  public setValue(argv: string[]): void {
+    if (this.parameter && argv.length !== 0) {
+      this.parameter.setValue(argv.shift());
     }
+    this.value = true;
   }
 
-  public getValue() {
+  public getValue(): boolean|string|string[] {
     if (this.parameter) {
       return this.parameter.getValue();
     }
     return this.value;
   }
 
-  public isSet() {
-    if (this.parameter) {
-      return this.setWithoutParameter || this.parameter.isSet();
-    }
+  public isSet(): boolean {
     return this.value !== undefined;
   }
 
-  public hasParameter() {
+  public hasParameter(): boolean {
     return this.parameter instanceof Parameter;
   }
 
-  public getShort() {
+  public getShort(): string {
     return this.short;
   }
 
-  public getLong() {
+  public getLong(): string {
     return this.long;
   }
 
-  public getName() {
+  public getName(): string {
     return this.long || this.short;
   }
 
-  public isMandatory() {
+  public isMandatory(): boolean {
     return this.mandatory;
   }
 
-  public doesAcceptMultipleValues() {
+  public doesAcceptMultipleValues(): boolean {
     return !!(this.parameter && this.parameter.isVariadic());
   }
 
-  public async validate(otherArgumentValues?: any) {
-    if (this.parameter) {
-      return this.parameter.validate(otherArgumentValues, this.getUsage(), this.setWithoutParameter);
+  public async validate(
+    otherArgumentValues?: Record<string, unknown>,
+  ): Promise<true|ValidationError> {
+    if (!this.isSet() && this.isMandatory()) {
+      return new MandatoryOptionError(this.getUsage());
+    }
+    if (this.isSet() && this.parameter) {
+      return this.parameter.validate(
+        otherArgumentValues,
+        this.getUsage(),
+      );
     }
     return true;
   }
 
-  public getUsage() {
-    let usage = "";
+  public getUsage(): string {
+    let usage = '';
     if (this.short) {
       usage += `-${this.short}`;
       if (this.long) {
-        usage += ", ";
+        usage += ', ';
       }
     }
     if (this.long) {
-      usage += `--${this.long}`
+      usage += `--${this.long}`;
     }
     if (this.parameter) {
       usage += ` ${this.parameter.getUsage()}`;
@@ -115,11 +119,11 @@ class Option extends BaseComponent {
     return usage;
   }
 
-  public getHelpParts() {
+  public getHelpParts(): HelpParts {
     return { usage: this.getUsage(), description: this.description };
   }
 
-  public toString() {
+  public toString(): string {
     return `Option ${this.getUsage()}`;
   }
 }

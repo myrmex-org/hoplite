@@ -1,25 +1,29 @@
-/* tslint:disable:max-classes-per-file */
-import { EOL } from "os";
-import { format } from "./utils";
+/* eslint-disable max-classes-per-file */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import { EOL } from 'os';
+import { format } from './utils';
 
 class ValidationError {
   public message: string;
+
   public childErrors: ValidationError[];
+
   public bottomMessage?: string;
-  public indent: string; 
+
+  public indent: string;
 
   constructor(message: string, errors: ValidationError[] = [], bottomMessage?: string) {
     this.message = message;
     this.childErrors = errors;
-    this.bottomMessage = bottomMessage
+    this.bottomMessage = bottomMessage;
     this.indent = '    ';
   }
 
-  public getOutput(indent = '') {
+  public getOutput(indent = ''): string {
     let output = this.message;
-    this.childErrors.forEach(error => {
+    this.childErrors.forEach((error) => {
       output += EOL + error.getOutput(indent + this.indent);
-    })
+    });
     if (this.bottomMessage) {
       output += EOL + this.indent + this.bottomMessage;
     }
@@ -41,25 +45,26 @@ class UnexpectedParameterError extends ValidationError {
 
 class MandatoryOptionError extends ValidationError {
   constructor(optionUsage: string) {
-    super(`The option ${format.cmd(optionUsage)} is ${format.error(`mandatory`)}.`)
+    super(`The option ${format.cmd(optionUsage)} is ${format.error('mandatory')}.`);
   }
 }
 
 class MandatoryParameterError extends ValidationError {
   constructor(parameterUsage: string) {
-    super(`The parameter ${format.cmd(parameterUsage)} is ${format.error(`mandatory`)}.`)
+    super(`The parameter ${format.cmd(parameterUsage)} is ${format.error('mandatory')}.`);
   }
 }
 
 class CommandError extends ValidationError {
   constructor(command: string, errors: ValidationError[]) {
-    let message = `${errors.length === 1 ? `An error` : `Some errors`} occured in command ${format.cmd(command)}:`;
+    const message = `${errors.length === 1 ? 'An error' : 'Some errors'} occured in command ${format.cmd(command)}:`;
     super(message, errors);
   }
 }
 
 class ParameterValidationError extends ValidationError {
   public value: string;
+
   constructor(usage: string, value: string, allowedValues?: string|string[]) {
     let message: string;
     let bottomMessage: string;
@@ -69,7 +74,7 @@ class ParameterValidationError extends ValidationError {
       message = `${format.error(value)} is not a correct value for ${format.cmd(usage)}.`;
     }
     if (Array.isArray(allowedValues)) {
-      bottomMessage = `Allowed values: ${allowedValues.map((v) => format.info(v)).join(`, `)}.`;
+      bottomMessage = `Allowed values: ${allowedValues.map((v) => format.info(v)).join(', ')}.`;
     } else if (allowedValues) {
       bottomMessage = allowedValues;
     }
@@ -88,10 +93,21 @@ class VariadicParameterValidationError extends ValidationError {
     }, []);
     let message = `Some values provided for ${format.cmd(usage)} are not valid:`;
     if (badValues.length === errors.length) {
-      message += ` ${badValues.map(bv => format.error(bv)).join(`, `)}.`;
+      message += ` ${badValues.map((bv) => format.error(bv)).join(', ')}.`;
       super(message, [], errors[0].bottomMessage);
     } else {
       super(message, errors);
+    }
+  }
+}
+
+class ParameterError {
+  constructor(messageOrAllowedValues?: string|string[]) {
+    let message: string;
+    if (Array.isArray(messageOrAllowedValues)) {
+      message = `Allowed values: ${messageOrAllowedValues.map((v) => format.info(v)).join(', ')}.`;
+    } else if (messageOrAllowedValues) {
+      message = messageOrAllowedValues;
     }
   }
 }
@@ -105,4 +121,5 @@ export {
   CommandError,
   ParameterValidationError,
   VariadicParameterValidationError,
+  ParameterError,
 };
