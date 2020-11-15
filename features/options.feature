@@ -19,7 +19,7 @@ Feature: A command with options
     When I add a flag "a"
     And I execute the command "my-command"
     Then it should succeed
-    And the key "a" of the parse result should be set to false
+    And the key "a" of the parse result should be undefined
 
   Scenario: A flag is set
     Given a command line named "my-command"
@@ -44,7 +44,7 @@ Feature: A command with options
     Then it should succeed
     And the key "a" of the parse result should be set to true
     And the key "b" of the parse result should be set to true
-    And the key "c" of the parse result should be set to false
+    And the key "c" of the parse result should be undefined
 
   Scenario: An mandatory option with parameter is not provided
     Given a command line named "my-command"

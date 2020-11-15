@@ -1,25 +1,27 @@
+/* eslint-disable func-names */
 import expect from 'expect';
 
-import { Given, When, Then, Before, After } from 'cucumber';
+import {
+  Given, When, Then, Before, After,
+} from 'cucumber';
 
+import { BaseComponent } from '../../src/base-component';
 import { Command } from '../../src/command';
 import { Option, OptionArg } from '../../src/option';
 import { Parameter } from '../../src/parameter';
 import { getArgv } from '../../src/process-argv-wrapper';
-import { BaseComponent, enableColors, hProcess } from "../../src/utils";
-
+import { enableColors, hProcess } from '../../src/utils';
 
 interface TestContext {
   rootCommand?: Command;
   command?: Command;
   currentArgument?: BaseComponent,
-  commandResult?: Record<string,unknown>;
+  commandResult?: Record<string, unknown>;
   mockRestore?: () => void,
   stdOut?: string,
   stdErr?: string,
   exitCode?: number
 }
-
 
 /**
  * We use a custom error to mock process.exit() call
@@ -37,34 +39,32 @@ Before(function (this: TestContext) {
     writeStdOut: hProcess.writeStdOut,
     writeStdErr: hProcess.writeStdErr,
     exit: hProcess.exit,
-  }
+  };
   this.mockRestore = () => {
     hProcess.writeStdOut = mockOriginals.writeStdOut;
     hProcess.writeStdErr = mockOriginals.writeStdErr;
-    hProcess.exit = mockOriginals.exit
+    hProcess.exit = mockOriginals.exit;
   };
   this.stdOut = '';
   this.stdErr = '';
-  delete this.exitCode
+  delete this.exitCode;
   hProcess.writeStdOut = (s: string) => {
     this.stdOut += s;
     return true;
-  }
+  };
   hProcess.writeStdErr = (s: string) => {
     this.stdErr += s;
     return true;
-  }
+  };
   hProcess.exit = (code: number) => {
     this.exitCode = code;
-    throw(new ProcessExit(code));
-  }
+    throw (new ProcessExit(code));
+  };
 });
-
 
 After(function (this: TestContext) {
   this.mockRestore();
-})
-
+});
 
 Given('a command line named {string}', function (this: TestContext, commandName: string) {
   enableColors(false);
@@ -75,7 +75,7 @@ Given('a command line named {string}', function (this: TestContext, commandName:
 
 When('I execute the command {string}', async function (this: TestContext, command: string) {
   const argv = await getArgv(command);
-  argv.shift()
+  argv.shift();
   expect(this.rootCommand.getName()).toStrictEqual(argv[1]);
   try {
     this.commandResult = await this.rootCommand.parse(argv) as Record<string, unknown>;
@@ -92,13 +92,20 @@ When('I set its description to {string}', function (this: TestContext, descripti
   this.currentArgument.setDescription(description);
 });
 
-
-/*******************************************************************************
+/** *****************************************************************************
  * Manage parameter
- *******************************************************************************/
+ ****************************************************************************** */
 
-function addParameter(this: TestContext, variadic: boolean, mandatory: boolean, name: string, allowedValues: string[]) {
-  const parameter = new Parameter({ name, mandatory, variadic, validator: allowedValues })
+function addParameter(
+  this: TestContext,
+  variadic: boolean,
+  mandatory: boolean,
+  name: string,
+  allowedValues: string[],
+) {
+  const parameter = new Parameter({
+    name, mandatory, variadic, validator: allowedValues,
+  });
   this.command.addParameter(parameter);
   this.currentArgument = parameter;
 }
@@ -123,12 +130,11 @@ When('I add a variadic mandatory parameter {string}', function (this: TestContex
   addParameter.bind(this)(true, true, parameterName);
 });
 
-
-/*******************************************************************************
+/** *****************************************************************************
  * Manage option
- *******************************************************************************/
+ ****************************************************************************** */
 function addOption(this: TestContext, args: OptionArg) {
-  const option = new Option(args)
+  const option = new Option(args);
   this.command.addOption(option);
   this.currentArgument = option;
 }
@@ -152,49 +158,47 @@ When('I add an option {string} with a variadic parameter {string}', function (th
 When('I add a mandatory option {string} with a parameter {string}', function (this: TestContext, option: string, parameterName: string) {
   const short = option.length === 1 ? option : undefined;
   const long = option.length > 1 ? option : undefined;
-  addOption.bind(this)({ short, long, parameter: { name: parameterName }, mandatory: true });
+  addOption.bind(this)({
+    short, long, parameter: { name: parameterName }, mandatory: true,
+  });
 });
-
 
 When('I add an option {string} with a parameter {string} that accepts values {string}', function (this: TestContext, option: string, parameterName: string, allowedValues: string) {
   const short = option.length === 1 ? option : undefined;
   const long = option.length > 1 ? option : undefined;
-  addOption.bind(this)({ short, long, parameter: { name: parameterName, validator: allowedValues.split(',')  } });
+  addOption.bind(this)({ short, long, parameter: { name: parameterName, validator: allowedValues.split(',') } });
 });
 
-
-/*******************************************************************************
+/** *****************************************************************************
  * Manage subcommand
- *******************************************************************************/
+ ****************************************************************************** */
 
- When('I add a subcommand {string}', function (this: TestContext, subcommandName: string) {
+When('I add a subcommand {string}', function (this: TestContext, subcommandName: string) {
   const command = new Command({ name: subcommandName });
   this.command.addSubCommand(command);
   this.command = command;
 });
 
-
-/*******************************************************************************
+/** *****************************************************************************
  * Check parsing results
- *******************************************************************************/
+ ****************************************************************************** */
 
-Then('it should fail', function (this: TestContext, ) {
+Then('it should fail', function (this: TestContext) {
   expect(this.exitCode).toBeGreaterThan(0);
   expect(this.commandResult).toBeUndefined();
 });
 
-Then('it should succeed', function (this: TestContext, ) {
+Then('it should succeed', function (this: TestContext) {
   expect(this.exitCode).toBeUndefined();
   expect(this.commandResult).toBeDefined();
 });
 
-Then('it should exit without error', function (this: TestContext, ) {
+Then('it should exit without error', function (this: TestContext) {
   expect(this.exitCode).toStrictEqual(0);
   expect(this.commandResult).toBeUndefined();
 });
 
 Then('the error output should be:', function (this: TestContext, docString: string) {
-  console.log(this.stdErr)
   expect(this.stdErr).toStrictEqual(docString);
 });
 

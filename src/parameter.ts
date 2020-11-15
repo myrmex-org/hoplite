@@ -1,5 +1,10 @@
-import { VariadicParameterValidationError, ParameterValidationError, ValidationError } from "./validation";
-import { BaseComponent, HelpParts } from "./utils";
+import {
+  VariadicParameterValidationError,
+  ParameterValidationError,
+  ValidationError,
+  MandatoryParameterError,
+} from './validation';
+import { BaseComponent, HelpParts } from './base-component';
 
 /**
  * A parameter validator can return:
@@ -10,14 +15,15 @@ import { BaseComponent, HelpParts } from "./utils";
  *  - a Promise of one of the above
  */
 interface ParameterValidator {
-  (value: string, otherArgumentValues: Record<string, unknown>): ValidationError|boolean|string[]|Promise<ValidationError|boolean|string[]>;
+  (value: string, otherArgumentValues: Record<string, unknown>):
+  ValidationError|boolean|string[]|Promise<ValidationError|boolean|string[]>;
 }
 
 const generateSimpleValidator = (usage: string, allowedValues: string[]) => {
   const validator: ParameterValidator = (value: string) => {
     if (!allowedValues.includes(value)) {
       return Promise.resolve(
-        new ParameterValidationError(usage, value, allowedValues)
+        new ParameterValidationError(usage, value, allowedValues),
       );
     }
     return Promise.resolve(true);
@@ -35,10 +41,15 @@ interface ParameterArg {
 
 class Parameter extends BaseComponent {
   protected name: string;
+
   protected description: string;
+
   protected mandatory: boolean;
+
   protected variadic: boolean;
+
   protected validator: string[]|ParameterValidator;
+
   protected value: string[];
 
   constructor({
@@ -73,33 +84,55 @@ class Parameter extends BaseComponent {
     return this.variadic;
   }
 
-  public async validate(otherArgumentValues: Record<string,unknown>, usageOverride?: string, forceToDefine = false): Promise<boolean|ValidationError> {
+  public async validate(
+    otherArgumentValues: Record<string, unknown>,
+    optionUsage?: string,
+  ): Promise<true|ValidationError> {
     const errors: ValidationError[] = [];
-    const usage = usageOverride || this.getUsage()
+    const usage = optionUsage || this.getUsage();
 
-    // If the instance's validator is an array, we generate a simple validator from it
-    let validator: ParameterValidator
+    // Check if the parameter is mandatory and set
+    // We exclude the case of a parameter linked to an option
+    if (!optionUsage && !this.isSet() && this.isMandatory()) {
+      return new MandatoryParameterError(usage);
+    }
+
+    let validator: ParameterValidator;
     if (this.validator instanceof Array) {
+      // If the instance's validator is an array, we generate a simple validator from it
       validator = generateSimpleValidator(usage, this.validator);
     } else {
+      // If the instance's validator is a function,
+      // we execute it and receive the result in a Promise
       const validatorResult = await this.validator(undefined, otherArgumentValues);
       if (validatorResult instanceof Array) {
+        // If the result of the Promise is an array, we generate a simple validator from it
         validator = generateSimpleValidator(usage, validatorResult);
       } else {
+        // Otherwise, we use the function as the validator
         validator = this.validator;
       }
     }
 
-    for (const value of this.value) {
-      const validationResult = await validator(value, otherArgumentValues);
-      if (validationResult === false) {
-        errors.push(new ParameterValidationError(usage, value));
-      } else if (validationResult instanceof ValidationError) {
-        errors.push(validationResult);
+    const validationResults = await Promise.all(
+      this.value.map(async (v) => {
+        const result = await validator(v, otherArgumentValues);
+        return {
+          value: v,
+          result,
+        };
+      }),
+    );
+    validationResults.forEach((vr) => {
+      if (vr.result === false) {
+        errors.push(new ParameterValidationError(usage, vr.value));
+      } else if (vr.result instanceof ValidationError) {
+        errors.push(vr.result);
       }
-    }
+    });
 
-    if (forceToDefine && this.value.length === 0) {
+    // If the parameter is linked to an option and has no value
+    if (optionUsage && this.value.length === 0) {
       const validationResult = await validator(undefined, otherArgumentValues);
       if (validationResult === true) {
         errors.push(new ParameterValidationError(usage, undefined));
@@ -107,7 +140,7 @@ class Parameter extends BaseComponent {
         errors.push(validationResult);
       }
     }
-    
+
     if (errors.length > 0) {
       if (this.isVariadic() && errors.length > 1) {
         return new VariadicParameterValidationError(usage, errors);
@@ -118,7 +151,7 @@ class Parameter extends BaseComponent {
   }
 
   public getUsage(): string {
-    const name = this.getName() + (this.isVariadic() ? `...` : ``);
+    const name = this.getName() + (this.isVariadic() ? '...' : '');
     if (this.isMandatory()) {
       return `<${name}>`;
     }
@@ -136,9 +169,8 @@ class Parameter extends BaseComponent {
   public getValue(): string|string[] {
     if (this.isVariadic()) {
       return this.value;
-    } else {
-      return this.value[this.value.length - 1];
     }
+    return this.value[this.value.length - 1];
   }
 
   public isSet(): boolean {

@@ -1,6 +1,6 @@
-import { Parameter, ParameterArg } from "./parameter";
-import { BaseComponent, HelpParts } from "./utils";
-import { ValidationError } from "./validation";
+import { Parameter, ParameterArg } from './parameter';
+import { BaseComponent, HelpParts } from './base-component';
+import { MandatoryOptionError, ValidationError } from './validation';
 
 interface OptionArg {
   short?: string;
@@ -12,12 +12,16 @@ interface OptionArg {
 
 class Option extends BaseComponent {
   protected short?: string;
+
   protected long?: string;
+
   protected description?: string;
+
   protected mandatory?: boolean;
+
   protected parameter?: Parameter;
+
   protected value: boolean;
-  protected setWithoutParameter: boolean;
 
   constructor({
     short,
@@ -27,7 +31,7 @@ class Option extends BaseComponent {
     parameter,
   }: OptionArg) {
     if (!short && !long) {
-      throw new Error("An option should have a least one short name or one long name.")
+      throw new Error('An option should have a least one short name or one long name.');
     }
     super();
     this.short = short;
@@ -38,20 +42,14 @@ class Option extends BaseComponent {
       this.parameter = parameter instanceof Parameter ? parameter : new Parameter(parameter);
       this.parameter.setAsMandatory(true);
     }
-    this.value = false;
-    this.setWithoutParameter = false;
+    this.value = undefined;
   }
 
   public setValue(argv: string[]): void {
-    if (this.parameter) {
-      if (argv.length === 0) {
-        this.setWithoutParameter = true;
-      } else {
-        this.parameter.setValue(argv.shift());
-      }
-    } else {
-      this.value = true;
+    if (this.parameter && argv.length !== 0) {
+      this.parameter.setValue(argv.shift());
     }
+    this.value = true;
   }
 
   public getValue(): boolean|string|string[] {
@@ -62,9 +60,6 @@ class Option extends BaseComponent {
   }
 
   public isSet(): boolean {
-    if (this.parameter) {
-      return this.setWithoutParameter || this.parameter.isSet();
-    }
     return this.value !== undefined;
   }
 
@@ -92,23 +87,31 @@ class Option extends BaseComponent {
     return !!(this.parameter && this.parameter.isVariadic());
   }
 
-  public async validate(otherArgumentValues?: Record<string, unknown>): Promise<boolean|ValidationError> {
-    if (this.parameter) {
-      return this.parameter.validate(otherArgumentValues, this.getUsage(), this.setWithoutParameter);
+  public async validate(
+    otherArgumentValues?: Record<string, unknown>,
+  ): Promise<true|ValidationError> {
+    if (!this.isSet() && this.isMandatory()) {
+      return new MandatoryOptionError(this.getUsage());
+    }
+    if (this.isSet() && this.parameter) {
+      return this.parameter.validate(
+        otherArgumentValues,
+        this.getUsage(),
+      );
     }
     return true;
   }
 
   public getUsage(): string {
-    let usage = "";
+    let usage = '';
     if (this.short) {
       usage += `-${this.short}`;
       if (this.long) {
-        usage += ", ";
+        usage += ', ';
       }
     }
     if (this.long) {
-      usage += `--${this.long}`
+      usage += `--${this.long}`;
     }
     if (this.parameter) {
       usage += ` ${this.parameter.getUsage()}`;
